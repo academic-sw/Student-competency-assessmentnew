@@ -289,11 +289,14 @@ const SR=[
 
 const buildTree = n => ({id:uid(), name:n.n, children:(n.c||[]).map(buildTree)});
 
-// =================== DEFAULT DB ===================
+// =================== DEFAULT DB & GAS CONFIG ===================
+// URL Web App จาก Google Apps Script (แชร์ฐานข้อมูลเดียวกันทุกเครื่อง ทุกบราวเซอร์)
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwXcDGvdPeCbi7-YsD13_H8UDZAQtaGERpM-Ce52uVrV-6UW96rcpktYyBhwPUxhmtAUA/exec';
+
 const DEFAULT_DB={
   settings:{
     logo:null, primary:'#10b981', secondary:'#fbbf24',
-    gasApiUrl: 'https://script.google.com/macros/s/AKfycbwXcDGvdPeCbi7-YsD13_H8UDZAQtaGERpM-Ce52uVrV-6UW96rcpktYyBhwPUxhmtAUA/exec' // URL จากการ Deploy Web App ใน Google Apps Script
+    gasApiUrl: DEFAULT_GAS_URL
   },
   users:[
     {id:'u-admin',username:'admin',password:'admin1234',name:'ผู้ดูแลระบบ',role:'admin',position:'กลุ่มบริหารงานวิชาการ'},
@@ -336,24 +339,81 @@ const DEFAULT_DB={
 };
 
 let db;
+let isSyncing = false;
+
 function loadDB(){
   const raw=localStorage.getItem('assessApp');
-  if(raw){try{db=JSON.parse(raw)}catch(e){db=null}}
-  if(!db){db=JSON.parse(JSON.stringify(DEFAULT_DB));saveDB()}
+  if(raw){
+    try{db=JSON.parse(raw)}catch(e){db=null}
+  }
+  if(!db){
+    db=JSON.parse(JSON.stringify(DEFAULT_DB));
+    saveDB();
+  }
+  if(!db.settings) db.settings=JSON.parse(JSON.stringify(DEFAULT_DB.settings));
+  // กำหนด URL เริ่มต้นหากยังว่างอยู่
+  if(!db.settings.gasApiUrl) db.settings.gasApiUrl = DEFAULT_GAS_URL;
   if(!db.topics) db.topics={junior:JR.map(buildTree),senior:SR.map(buildTree)};
-  if(!db.settings) db.settings=DEFAULT_DB.settings;
   if(!db.assessments) db.assessments=[];
   if(!db.activities) db.activities=[];
 }
 function saveDB(){localStorage.setItem('assessApp',JSON.stringify(db))}
 
-// =================== GAS SYNC API ===================
+// =================== GAS SYNC API (CORS & JSONP Supported) ===================
 async function callGas(action, payload){
-  const apiUrl = db.settings.gasApiUrl;
+  const apiUrl = db.settings.gasApiUrl || DEFAULT_GAS_URL;
   if(!apiUrl){
-    console.warn("GAS URL not configured, saved to local only.");
+    console.warn("GAS URL not configured");
     return { status: 'offline', message: 'GAS URL not configured' };
   }
+
+  // 1. ถ้าเป็นการ getDatabase สามารถใช้ JSONP ข้าม Domain ได้อย่างลื่นไหล 100% ไม่มีปัญหาเรื่อง CORS
+  if(action === 'getDatabase'){
+    return new Promise((resolve)=>{
+      const cbName = 'gas_cb_' + Date.now() + '_' + Math.floor(Math.random()*1000);
+      let resolved = false;
+      
+      const timeout = setTimeout(()=>{
+        if(!resolved){
+          resolved = true;
+          delete window[cbName];
+          resolve({ status: 'timeout', message: 'Connection timed out' });
+        }
+      }, 10000);
+
+      window[cbName] = function(res){
+        if(!resolved){
+          resolved = true;
+          clearTimeout(timeout);
+          delete window[cbName];
+          if(document.getElementById(cbName)) document.getElementById(cbName).remove();
+          resolve(res);
+        }
+      };
+
+      const script = document.createElement('script');
+      script.id = cbName;
+      const delim = apiUrl.indexOf('?') > -1 ? '&' : '?';
+      script.src = `${apiUrl}${delim}action=getDatabase&callback=${cbName}&_t=${Date.now()}`;
+      script.onerror = function(){
+        if(!resolved){
+          resolved = true;
+          clearTimeout(timeout);
+          delete window[cbName];
+          if(document.getElementById(cbName)) document.getElementById(cbName).remove();
+          // Fallback ลอง fetch
+          fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action, payload })
+          }).then(r=>r.json()).then(resolve).catch(err=>resolve({ status:'error', message: err.toString() }));
+        }
+      };
+      document.body.appendChild(script);
+    });
+  }
+
+  // 2. สำหรับ POST Actions (saveAssessments, syncFullDatabase, ฯลฯ)
   try {
     const res = await fetch(apiUrl, {
       method: 'POST',
@@ -367,31 +427,69 @@ async function callGas(action, payload){
   }
 }
 
-async function syncFromGoogleSheets(){
-  if(!db.settings.gasApiUrl){
-    toast('info', 'ยังไม่ได้ระบุ Web App URL ของ Google Sheets');
-    return;
+// ฟังก์ชันดึงข้อมูลจาก Google Sheets อัตโนมัติ (Silent Sync เบื้องหลัง)
+async function syncFromGoogleSheets(silent = true){
+  const apiUrl = db.settings.gasApiUrl || DEFAULT_GAS_URL;
+  if(!apiUrl || isSyncing) return;
+  isSyncing = true;
+  updateSyncIndicator('syncing');
+
+  if(!silent){
+    Swal.fire({title:'กำลังโหลดข้อมูลจาก Google Sheets...', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
   }
-  Swal.fire({title:'กำลังโหลดข้อมูลจาก Google Sheets...', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
-  const res = await callGas('getDatabase', {});
-  Swal.close();
-  if(res && res.status === 'success' && res.data){
-    const d = res.data;
-    if(d.users && d.users.length) db.users = d.users;
-    if(d.terms && d.terms.length) db.terms = d.terms;
-    if(d.subjectGroups && d.subjectGroups.length) db.subjectGroups = d.subjectGroups;
-    if(d.subjects && d.subjects.length) db.subjects = d.subjects;
-    if(d.levels && d.levels.length) db.levels = d.levels;
-    if(d.classes && d.classes.length) db.classes = d.classes;
-    if(d.students && d.students.length) db.students = d.students;
-    if(d.assessments && d.assessments.length) db.assessments = d.assessments;
-    if(d.activities && d.activities.length) db.activities = d.activities;
-    if(d.settings) Object.assign(db.settings, d.settings);
-    saveDB();
-    toast('success', 'ซิงก์ข้อมูลจาก Google Sheets สำเร็จ');
-    render();
+
+  try {
+    const res = await callGas('getDatabase', {});
+    if(!silent) Swal.close();
+
+    if(res && res.status === 'success' && res.data){
+      const d = res.data;
+      if(d.users && d.users.length) db.users = d.users;
+      if(d.terms && d.terms.length) db.terms = d.terms;
+      if(d.subjectGroups && d.subjectGroups.length) db.subjectGroups = d.subjectGroups;
+      if(d.subjects && d.subjects.length) db.subjects = d.subjects;
+      if(d.levels && d.levels.length) db.levels = d.levels;
+      if(d.classes && d.classes.length) db.classes = d.classes;
+      if(d.students && d.students.length) db.students = d.students;
+      if(d.assessments) db.assessments = d.assessments;
+      if(d.activities) db.activities = d.activities;
+      if(d.settings) {
+        // รักษา gasApiUrl เดิมไว้
+        const currentUrl = db.settings.gasApiUrl;
+        Object.assign(db.settings, d.settings);
+        if(currentUrl) db.settings.gasApiUrl = currentUrl;
+      }
+      saveDB();
+      updateSyncIndicator('online');
+      if(!silent) toast('success', 'ซิงก์ข้อมูลจาก Google Sheets สำเร็จ');
+      
+      // อัปเดตการแสดงผลหน้าปัจจุบัน
+      if(state.view === 'public-dash') renderPublicDashData();
+      else if(state.view === 'teacher' && state.teacherTab === 'assess') renderAssessBody();
+      else if(state.view === 'teacher' && state.teacherTab === 'dashboard') renderTeacherDash();
+      else if(state.view === 'admin' && state.adminTab === 'activity') render();
+      else if(state.view === 'admin' && state.adminTab === 'dashboard') renderAdminDashData();
+    } else {
+      updateSyncIndicator('offline');
+      if(!silent) toast('error', 'ไม่สามารถเชื่อมต่อ Google Sheets: ' + (res?.message||''));
+    }
+  } catch(e) {
+    updateSyncIndicator('offline');
+    if(!silent) toast('error', 'เกิดข้อผิดพลาด: ' + e.toString());
+  } finally {
+    isSyncing = false;
+  }
+}
+
+function updateSyncIndicator(status){
+  const el = $('#sync-status-indicator');
+  if(!el) return;
+  if(status === 'syncing'){
+    el.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 animate-pulse"><span class="w-2 h-2 rounded-full bg-amber-500"></span> กำลังดึงข้อมูลล่าสุด...</span>`;
+  } else if(status === 'online'){
+    el.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> เชื่อมต่อ Google Sheets แล้ว</span>`;
   } else {
-    toast('error', 'ไม่สามารถเชื่อมต่อ Google Sheets ได้: ' + (res?.message||''));
+    el.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600"><span class="w-2 h-2 rounded-full bg-slate-400"></span> ข้อมูลแคชในเครื่อง</span>`;
   }
 }
 
@@ -482,13 +580,16 @@ function footerHTML(){
 function viewHome(){
   const logo=db.settings.logo?`<img src="${db.settings.logo}" class="w-32 h-32 object-contain mx-auto rounded-xl shadow-sm">`:`<div class="w-32 h-32 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 mx-auto flex items-center justify-center text-white text-4xl font-bold shadow-md">ว</div>`;
   return `<div class="min-h-screen flex flex-col">
-    <header class="bg-white shadow-sm">
-      <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+    <header class="bg-white shadow-sm sticky top-0 z-30">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
         <div class="flex items-center gap-3">
           <span class="text-sm font-semibold text-slate-700">🏫 โรงเรียนเสาไห้ "วิมลวิทยานุกูล"</span>
+          <div id="sync-status-indicator" class="hidden sm:inline-block"></div>
         </div>
         <div class="flex items-center gap-2">
-          ${db.settings.gasApiUrl?`<button onclick="syncFromGoogleSheets()" class="btn-outline px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 font-medium">🔄 ซิงก์ Google Sheets</button>`:''}
+          <button onclick="syncFromGoogleSheets(false)" class="btn-outline px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 font-medium" title="กดเพื่ออัปเดตข้อมูลล่าสุด">
+            🔄 ซิงก์ข้อมูล
+          </button>
           <button onclick="openLoginModal()" class="btn-primary px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 font-medium">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
             เข้าสู่ระบบ
@@ -501,7 +602,7 @@ function viewHome(){
         ${logo}
         <h1 class="mt-6 text-2xl md:text-3xl font-bold text-slate-800">ระบบประเมินสมรรถนะสำคัญของผู้เรียน</h1>
         <h2 class="mt-2 text-lg md:text-xl text-primary font-semibold">โรงเรียนเสาไห้ "วิมลวิทยานุกูล"</h2>
-        <p class="mt-3 text-slate-500 text-sm">ประเมินสมรรถนะผู้เรียนรายคน/หลายคนพร้อมกัน พร้อมวิเคราะห์และส่งออกฐานข้อมูล Google Sheets</p>
+        <p class="mt-3 text-slate-500 text-sm">ประเมินสมรรถนะผู้เรียนรายคน/หลายคนพร้อมกัน พร้อมวิเคราะห์และส่งออกฐานข้อมูล Google Sheets อัตโนมัติ</p>
         <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           <button onclick="navigate('public-dash')" class="btn-primary px-6 py-3 rounded-xl font-semibold shadow-lg shadow-emerald-200 flex items-center gap-2 justify-center">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -2058,7 +2159,7 @@ function changePassword(){
 // =================== HEADER ===================
 function dashHeader(subtitle, role){
   const logo=db.settings.logo?`<img src="${db.settings.logo}" class="w-10 h-10 object-contain rounded-lg shadow-sm">`:`<div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">ว</div>`;
-  return `<header class="text-white shadow-md" style="background:linear-gradient(135deg, ${db.settings.primary}, ${db.settings.primary}dd)">
+  return `<header class="text-white shadow-md sticky top-0 z-30" style="background:linear-gradient(135deg, ${db.settings.primary}, ${db.settings.primary}dd)">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
       <div class="flex items-center gap-3">
         ${logo}
@@ -2068,8 +2169,11 @@ function dashHeader(subtitle, role){
         </div>
       </div>
       <div class="flex items-center gap-2">
-        ${db.settings.gasApiUrl?`<button onclick="syncFromGoogleSheets()" class="bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1">🔄 ดึงข้อมูลชีท</button>`:''}
-        ${state.user?`<span class="text-xs opacity-90 hidden sm:inline">${esc(state.user.name)}</span>`:''}
+        <div id="sync-status-indicator"></div>
+        <button onclick="syncFromGoogleSheets(false)" class="bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1" title="กดเพื่อดึงข้อมูลล่าสุด">
+          🔄 ซิงก์ชีท
+        </button>
+        ${state.user?`<span class="text-xs opacity-90 hidden sm:inline font-medium bg-black/10 px-2 py-1 rounded">${esc(state.user.name)}</span>`:''}
         ${state.user?`<button onclick="logout()" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-medium">ออกจากระบบ</button>`:`<button onclick="navigate('home')" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-medium">หน้าแรก</button>`}
       </div>
     </div>
@@ -2088,6 +2192,17 @@ function boot(){
   loadDB();
   applyTheme();
   render();
+
+  // ดึงข้อมูลจาก Google Sheets อัตโนมัติทันทีที่เปิดเว็บ (ไม่ต้องกดปุ่มเอง)
+  // เพื่อให้ทุกบราวเซอร์ ทุกเครื่อง ได้ข้อมูลคะแนนและผู้ใช้ล่าสุดตรงกัน 100%
+  setTimeout(()=>{
+    syncFromGoogleSheets(true);
+  }, 100);
+
+  // ตั้งเวลาดึงข้อมูลใหม่อัตโนมัติทุก 45 วินาที เมื่อเปิดหน้าเว็บทิ้งไว้
+  setInterval(()=>{
+    syncFromGoogleSheets(true);
+  }, 45000);
 }
 boot();
 </script>
