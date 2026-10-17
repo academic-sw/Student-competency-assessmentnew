@@ -950,8 +950,8 @@ function drawDashboardCharts(st){
         scales:{y:{min:0,max:3,ticks:{stepSize:1}},x:{grid:{display:false}}}}
     });
   }
-  const counts=[0,0,0,0];
-  st.all.forEach(a=>{ const q=qualityOf(a); if(q.level!==null) counts[q.level]++; });
+  const counts=[0,0,0,0]; // [ระดับ 3, ระดับ 2, ระดับ 1, ระดับ 0]
+st.all.forEach(a=>{ const q=qualityOf(a); if(q.level!==null) counts[3-q.level]++; });
   if(charts.chartQuality) charts.chartQuality.destroy();
   const c2=$('#chartQuality');
   if(c2){
