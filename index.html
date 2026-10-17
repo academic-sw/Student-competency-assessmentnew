@@ -312,22 +312,30 @@ const DEFAULT_DB = {
   activityLogs: []
 };
 
+const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbwXcDGvdPeCbi7-YsD13_H8UDZAQtaGERpM-Ce52uVrV-6UW96rcpktYyBhwPUxhmtAUA/exec';
+
 let db;
+let isSyncingCloud = false;
+
 function loadDB(){
+  const urlParam = new URLSearchParams(window.location.search).get('api');
   const raw = localStorage.getItem('assessApp_v2');
-  if(raw){ try{ db=JSON.parse(raw); }catch(e){ db=null; } }
-  if(!db){ db=JSON.parse(JSON.stringify(DEFAULT_DB)); saveDB(); }
-  if(!db.topics) db.topics={junior:JR.map(buildTree), senior:SR.map(buildTree)};
-  if(!db.settings) db.settings={logo:null, primary:'#10b981', secondary:'#fbbf24', gasUrl:'', driveFolderId:DRIVE_FOLDER_ID};
+  if(raw){ try{ db = JSON.parse(raw); }catch(e){ db = null; } }
+  if(!db){ db = JSON.parse(JSON.stringify(DEFAULT_DB)); }
+  if(!db.topics) db.topics = {junior:JR.map(buildTree), senior:SR.map(buildTree)};
+  if(!db.settings) db.settings = {logo:null, primary:'#10b981', secondary:'#fbbf24', gasUrl:DEFAULT_GAS_URL, driveFolderId:DRIVE_FOLDER_ID};
+  if(urlParam) db.settings.gasUrl = urlParam;
+  if(!db.settings.gasUrl) db.settings.gasUrl = DEFAULT_GAS_URL;
   if(!db.settings.driveFolderId) db.settings.driveFolderId = DRIVE_FOLDER_ID;
-  if(!db.assessments) db.assessments=[];
-  if(!db.activityLogs) db.activityLogs=[];
+  if(!db.assessments) db.assessments = [];
+  if(!db.activityLogs) db.activityLogs = [];
+  saveDB();
 }
 function saveDB(){ localStorage.setItem('assessApp_v2', JSON.stringify(db)); }
 
 // =================== GOOGLE SHEETS & DRIVE SYNC API ===================
 async function apiCall(action, payload={}) {
-  const url = db.settings.gasUrl;
+  const url = db.settings.gasUrl || DEFAULT_GAS_URL;
   if(!url){
     console.warn('ยังไม่ได้ระบุ Google Apps Script Web App URL');
     return null;
@@ -342,6 +350,73 @@ async function apiCall(action, payload={}) {
   } catch (err) {
     console.error('API Error:', err);
     throw err;
+  }
+}
+
+/**
+ * ดึงข้อมูลสดทั้งหมดจาก Google Sheets มาอัปเดตในระบบ (Cloud Sync)
+ * ช่วยให้เปิดในเบราว์เซอร์อื่น หรือเครื่องอื่นแล้วข้อมูลตรงกันทันที 100%
+ */
+async function fetchCloudData(silent = false){
+  const url = db.settings.gasUrl || DEFAULT_GAS_URL;
+  if(!url) return;
+  if(isSyncingCloud) return;
+  isSyncingCloud = true;
+
+  if(!silent){
+    Swal.fire({
+      title: 'กำลังดึงข้อมูลล่าสุด...',
+      text: 'กำลังโหลดข้อมูลจาก Google Sheets',
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+  }
+
+  try {
+    // ดึงข้อมูลผ่าน action getData
+    const res = await apiCall('getData');
+    if(res && res.status === 'success' && res.data){
+      const d = res.data;
+      if(Array.isArray(d.users) && d.users.length) db.users = d.users;
+      if(Array.isArray(d.terms) && d.terms.length) db.terms = d.terms;
+      if(Array.isArray(d.subjectGroups) && d.subjectGroups.length) db.subjectGroups = d.subjectGroups;
+      if(Array.isArray(d.subjects) && d.subjects.length) db.subjects = d.subjects;
+      if(Array.isArray(d.levels) && d.levels.length) db.levels = d.levels;
+      if(Array.isArray(d.classes) && d.classes.length) db.classes = d.classes;
+      if(Array.isArray(d.students) && d.students.length) db.students = d.students;
+      if(Array.isArray(d.assessments)) db.assessments = d.assessments;
+      if(Array.isArray(d.activityLogs)) db.activityLogs = d.activityLogs;
+
+      if(d.topics && (d.topics.junior || d.topics.senior)){
+        if(d.topics.junior) db.topics.junior = d.topics.junior;
+        if(d.topics.senior) db.topics.senior = d.topics.senior;
+      }
+
+      if(d.settings){
+        if(d.settings.logo) db.settings.logo = d.settings.logo;
+        if(d.settings.primary) db.settings.primary = d.settings.primary;
+        if(d.settings.secondary) db.settings.secondary = d.settings.secondary;
+      }
+
+      saveDB();
+      applyTheme();
+      render();
+
+      if(!silent){
+        Swal.close();
+        toast('success', 'ซิงค์ข้อมูลล่าสุดจาก Google Sheets สำเร็จ');
+      } else {
+        console.log('Auto-synced with Google Sheets successfully');
+      }
+    }
+  } catch(err){
+    console.warn('Cannot fetch from Google Sheets:', err);
+    if(!silent){
+      Swal.close();
+      Swal.fire('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถดึงข้อมูลจาก Google Sheets ได้ กรุณาตรวจสอบอินเทอร์เน็ตหรือ URL เว็บแอป', 'error');
+    }
+  } finally {
+    isSyncingCloud = false;
   }
 }
 
@@ -443,10 +518,16 @@ function viewHome(){
         <div class="flex items-center gap-2">
           <span class="text-sm font-bold text-emerald-800">🏫 โรงเรียนเสาไห้ "วิมลวิทยานุกูล"</span>
         </div>
-        <button onclick="openLoginModal()" class="btn-primary px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
-          เข้าสู่ระบบ
-        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="fetchCloudData(false)" title="ดึงข้อมูลล่าสุดจาก Google Sheets" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition border">
+            <svg class="w-3.5 h-3.5 ${isSyncingCloud ? 'spin text-emerald-600' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span class="hidden sm:inline">ดึงข้อมูลสด</span>
+          </button>
+          <button onclick="openLoginModal()" class="btn-primary px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+            เข้าสู่ระบบ
+          </button>
+        </div>
       </div>
     </header>
     <main class="flex-1 flex items-center justify-center px-4 py-12">
@@ -2421,7 +2502,13 @@ function dashHeader(subtitle, role){
           <p class="text-xs text-emerald-100 font-medium">${esc(subtitle)}</p>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 flex-wrap">
+        <!-- ปุ่มดึงข้อมูลล่าสุดจาก Google Sheets -->
+        <button onclick="fetchCloudData(false)" title="ดึงข้อมูลล่าสุดจาก Google Sheets" class="bg-white/20 hover:bg-white/30 text-white px-2.5 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-xs">
+          <svg class="w-3.5 h-3.5 ${isSyncingCloud ? 'spin' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span class="hidden sm:inline">ดึงข้อมูลสด</span>
+        </button>
+
         ${state.user ? `
           <span class="text-xs bg-white/10 px-3 py-1.5 rounded-lg border border-white/20 font-medium hidden sm:inline">
             👤 ${esc(state.user.name)} (${state.user.role === 'admin' ? 'ผู้ดูแล' : 'ครู'})
@@ -2455,10 +2542,15 @@ function logout(){
 }
 
 // =================== BOOTSTRAP ===================
-function boot(){
+async function boot(){
   loadDB();
   applyTheme();
   render();
+
+  // ดึงข้อมูลสดจาก Google Sheets อัตโนมัติทันทีที่เปิดแอป (เพื่อแสดงผลให้ตรงกันทุกเบราว์เซอร์/ทุกเครื่อง)
+  if(db.settings.gasUrl){
+    fetchCloudData(true);
+  }
 }
 boot();
 </script>
