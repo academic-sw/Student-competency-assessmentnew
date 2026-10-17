@@ -1,0 +1,2352 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>ระบบประเมินสมรรถนะสำคัญของผู้เรียน - โรงเรียนเสาไห้ "วิมลวิทยานุกูล"</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  *{font-family:'Sarabun',sans-serif}
+  :root{--primary:#10b981;--secondary:#fbbf24;--primary-light:#d1fae5}
+  .btn-primary{background:var(--primary);color:#fff;transition:.15s}
+  .btn-primary:hover{filter:brightness(.95)}
+  .btn-outline{border:1px solid var(--primary);color:var(--primary);background:#fff;transition:.15s}
+  .btn-outline:hover{background:var(--primary-light)}
+  .text-primary{color:var(--primary)}
+  .bg-primary{background:var(--primary)}
+  .border-primary{border-color:var(--primary)}
+  .ring-primary:focus{outline:2px solid var(--primary);outline-offset:1px}
+  .card{background:#fff;border-radius:1rem;box-shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);border:1px solid #f1f5f9}
+  .skeleton{background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 37%,#f1f5f9 63%);background-size:400% 100%;animation:sk 1.4s ease infinite;border-radius:.5rem}
+  @keyframes sk{0%{background-position:100% 50%}100%{background-position:0 50%}}
+  .spin{animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .fade-in{animation:fi .25s ease}
+  @keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .q-3{background:#d1fae5;color:#065f46;border-color:#6ee7b7}
+  .q-2{background:#dbeafe;color:#1e40af;border-color:#93c5fd}
+  .q-1{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+  .q-0{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+  .q-null{background:#f3f4f6;color:#6b7280;border-color:#e5e7eb}
+  .scroll-thin::-webkit-scrollbar{height:8px;width:8px}
+  .scroll-thin::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:4px}
+  .score-select{appearance:none;text-align:center;font-weight:600;border-radius:6px;padding:3px 6px;font-size:12px;border-width:1.5px;transition:all .15s}
+  .score-select[data-v="3"]{background:#d1fae5;color:#065f46;border-color:#6ee7b7}
+  .score-select[data-v="2"]{background:#dbeafe;color:#1e40af;border-color:#93c5fd}
+  .score-select[data-v="1"]{background:#fef3c7;color:#92400e;border-color:#fcd34d}
+  .score-select[data-v="0"]{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+  .score-select[data-v=""]{background:#f9fafb;color:#9ca3af;border-color:#cbd5e1}
+  .score-select.score-unassessed{border-color:#ef4444!important;background:#fef2f2!important;animation:pulseBorder 1.5s infinite}
+  @keyframes pulseBorder{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.5)}50%{box-shadow:0 0 0 4px rgba(239,68,68,0.2)}}
+  .tab-active{background:var(--primary);color:#fff}
+  .badge{display:inline-flex;align-items:center;gap:.25rem;padding:.125rem .5rem;border-radius:9999px;font-size:.7rem;font-weight:500;border:1px solid}
+  table{font-size:13px}
+  th{font-weight:600;font-size:12px;color:#64748b;padding:8px 6px;background:#f8fafc;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:1;text-align:center;vertical-align:middle}
+  td{padding:6px;border-bottom:1px solid #f1f5f9;text-align:center;vertical-align:middle}
+  .th-topic{min-width:130px;max-width:150px;vertical-align:top!important;padding:6px 4px!important}
+  .th-topic .code{font-size:10px;font-weight:700;color:#0f172a;line-height:1.1}
+  .th-topic .text{font-size:9px;font-weight:400;color:#475569;line-height:1.15;margin-top:2px;
+    display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+</style>
+</head>
+<body class="bg-slate-50 text-slate-800">
+<div id="app"></div>
+
+<script>
+// =================== CONFIG & UTILS ===================
+const $ = (s, e=document) => e.querySelector(s);
+const $$ = (s, e=document) => [...e.querySelectorAll(s)];
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const avg = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+const qf = v => v == null ? null : (v >= 2.5 ? 3 : v >= 1.5 ? 2 : v >= 0.5 ? 1 : 0);
+const QN = {3: 'ดีเยี่ยม', 2: 'ดี', 1: 'พอใช้/ผ่านเกณฑ์', 0: 'ปรับปรุง'};
+const QBG = {3: 'q-3', 2: 'q-2', 1: 'q-1', 0: 'q-0'};
+
+const qBadge = (lvl, avgV) => {
+  const l = lvl == null ? null : Math.round(lvl);
+  if (l == null) return `<span class="badge q-null">ยังไม่ประเมิน</span>`;
+  const label = avgV != null ? `${QN[l]} (${avgV.toFixed(2)})` : QN[l];
+  return `<span class="badge ${QBG[l]}">${l} • ${label}</span>`;
+};
+
+const toast = (icon, title) => Swal.fire({toast:true, position:'top-end', showConfirmButton:false, timer:2500, icon, title});
+const confirmDel = (title='ยืนยันการลบ?', text='ข้อมูลจะถูกลบถาวร') => Swal.fire({title, text, icon:'warning', showCancelButton:true, confirmButtonText:'ลบ', cancelButtonText:'ยกเลิก', confirmButtonColor:'#ef4444'});
+const skeletonList = (rows=5) => `<div class="space-y-2 p-4">${Array(rows).fill(0).map(() => `<div class="skeleton h-10 w-full"></div>`).join('')}</div>`;
+
+// Google Drive Folder ID
+const DRIVE_FOLDER_ID = '1ehgB_CLugTr96TwYLTbSISYyO4K5rGob';
+
+// =================== TOPIC DATA ===================
+const JR = [
+ {n:'1. ความสามารถในการสื่อสาร',c:[
+  {n:'1.1 ใช้ภาษาถ่ายทอดความรู้ความเข้าใจ ความคิด ความรู้สึก และทัศนะของตนเอง ด้วยการพูดและการเขียน',c:[
+   {n:'1.1.1 พูดถ่ายทอดความรู้ ความเข้าใจจากสารที่อ่าน ฟัง หรือดูด้วยภาษาของตนเองได้'},
+   {n:'1.1.2 พูดถ่ายทอดความคิด ความรู้สึกและทัศนะของตนเองจากสารที่อ่าน ฟัง หรือดูด้วยภาษาของตนเองได้'},
+   {n:'1.1.3 เขียนถ่ายทอดความรู้ ความเข้าใจจากสารที่อ่าน ฟังหรือดูด้วยภาษาของตนเองได้'},
+   {n:'1.1.4 เขียนถ่ายทอดความคิด ความรู้สึกและทัศนะของตนเองจากสารที่อ่าน ฟัง หรือดูด้วยภาษาของตนเองได้'}]},
+  {n:'1.2 พูดเจรจาต่อรอง',c:[
+   {n:'1.2.1 พูดเจรจาโน้มน้าวได้อย่างเหมาะสมตามสถานการณ์เพื่อประโยชน์ต่อตนเองและสังคม'},
+   {n:'1.2.2 พูดเจรจาต่อรองได้อย่างเหมาะสมตามสถานการณ์เพื่อประโยชน์ต่อตนเองและสังคม'}]},
+  {n:'1.3 เลือกรับหรือไม่รับข้อมูลข่าวสาร',c:[
+   {n:'1.3.1 รับรู้ข้อมูลข่าวสารที่เป็นประโยชน์'},
+   {n:'1.3.2 ตัดสินใจเลือกรับหรือไม่รับข้อมูลข่าวสารได้อย่างมีเหตุผล'}]},
+  {n:'1.4 เลือกใช้วิธีการสื่อสาร',c:[
+   {n:'1.4.1 เลือกใช้วิธีการสื่อสารที่มีประสิทธิภาพโดยคำนึงถึงผลกระทบที่มีต่อตนเองและสังคม'}]}
+ ]},
+ {n:'2. ความสามารถในการคิด',c:[
+  {n:'2.1 คิดพื้นฐาน',c:[
+   {n:'2.1.1 จำแนก จัดหมวดหมู่ จัดลำดับความสำคัญ และเปรียบเทียบข้อมูลในบริบทของการดำเนินชีวิตประจำวัน'},
+   {n:'2.1.2 หาความสัมพันธ์ของส่วนประกอบต่าง ๆ ของข้อมูลที่พบเห็นในบริบทของการดำเนินชีวิตประจำวัน'},
+   {n:'2.1.3 สามารถระบุหลักการสำคัญ แนวคิดหรือความรู้ที่ปรากฏในข้อมูลที่พบเห็นในบริบทของการดำเนินชีวิตประจำวัน'}]},
+  {n:'2.2 คิดขั้นสูง',c:[
+   {n:'2.2.1 คิดสังเคราะห์เพื่อนำไปสู่การวางแผน ออกแบบ คาดการณ์ กำหนดเป็นเป้าหมายในอนาคต'},
+   {n:'2.2.2 คิดสร้างสรรค์ มีจินตนาการ คิดในทางบวก และสามารถประยุกต์สร้างสรรค์สิ่งใหม่'},
+   {n:'2.2.3 คิดอย่างมีวิจารณญาณ เพื่อตัดสินใจเลือกทางเลือกที่หลากหลายโดยใช้เกณฑ์ที่เหมาะสม'}]}
+ ]},
+ {n:'3. ความสามารถในการแก้ปัญหา',c:[
+  {n:'3.1 ใช้กระบวนการแก้ปัญหาโดยการวิเคราะห์ปัญหา วางแผนในการแก้ปัญหา ดำเนินการแก้ปัญหา ตรวจสอบและสรุปผล',c:[
+   {n:'3.1.1 วิเคราะห์ปัญหา',c:[
+    {n:'3.1.1.1 ระบุปัญหาที่เกิดขึ้นกับตนเอง'},
+    {n:'3.1.1.2 ระบุปัญหาที่เกิดขึ้นกับบุคคลใกล้ตัว'},
+    {n:'3.1.1.3 ระบุสาเหตุของปัญหา'},
+    {n:'3.1.1.4 จัดระบบข้อมูล',c:[
+     {n:'3.1.1.4.1 การจำแนก'},
+     {n:'3.1.1.4.2 การจัดลำดับ'},
+     {n:'3.1.1.4.3 เชื่อมโยง'}]},
+    {n:'3.1.1.5 การตั้งสมมติฐาน'},
+    {n:'3.1.1.6 การกำหนดทางเลือก'},
+    {n:'3.1.1.7 การตัดสินใจเลือกวิธีการ'}]},
+   {n:'3.1.2 การวางแผนในการแก้ปัญหา'},
+   {n:'3.1.3 การดำเนินการแก้ปัญหา',c:[
+    {n:'3.1.3.1 การปฏิบัติตามแผน'},
+    {n:'3.1.3.2 การตรวจสอบทบทวนแผน'},
+    {n:'3.1.3.3 การบันทึกผลการปฏิบัติ'}]},
+   {n:'3.1.4 สรุปผลและรายงาน'}]},
+  {n:'3.2 ผลลัพธ์ที่เกิดจากการแก้ปัญหา',c:[
+   {n:'3.2.1 คุณภาพของผลงาน/การแก้ปัญหา'},
+   {n:'3.2.2 นำไปประยุกต์ใช้'}]}
+ ]},
+ {n:'4. ความสามารถในการใช้ทักษะชีวิต',c:[
+  {n:'4.1 นำกระบวนการเรียนรู้ที่หลากหลายไปใช้ในชีวิตประจำวัน',c:[
+   {n:'4.1.1 นำความรู้ ทักษะ และกระบวนการที่หลากหลายมาสร้างผลงาน/โครงงานที่เป็นระบบ'}]},
+  {n:'4.2 เรียนรู้ด้วยตนเองและเรียนรู้อย่างต่อเนื่อง',c:[
+   {n:'4.2.1 มีทักษะในการแสวงหาความรู้ ข้อมูล ข่าวสาร'},
+   {n:'4.2.2 สามารถเชื่อมโยงความรู้'},
+   {n:'4.2.3 มีวิธีการในการศึกษาความรู้เพิ่มเติมอย่างต่อเนื่อง'}]},
+  {n:'4.3 ทำงานและอยู่ร่วมกันในสังคมอย่างมีความสุข',c:[
+   {n:'4.3.1 ทำงานร่วมกับผู้อื่นอย่างสร้างสรรค์'},
+   {n:'4.3.2 ปฏิบัติตามกฎ กติกา หน้าที่ ความรับผิดชอบ'},
+   {n:'4.3.3 การเข้าร่วมกิจกรรมกับผู้อื่นอย่างสร้างสรรค์'},
+   {n:'4.3.4 เห็นคุณค่าของการมีชีวิต'},
+   {n:'4.3.5 เข้าใจ ยอมรับ ปรับตัวต่อการเปลี่ยนแปลงทางร่างกาย'},
+   {n:'4.3.6 ใช้ภาษากิริยาท่าทางเหมาะสมกับบุคคลและโอกาส'},
+   {n:'4.3.7 ปฏิบัติงานในส่วนรวมอย่างมีความสุข'}]},
+  {n:'4.4 จัดการกับปัญหาและความขัดแย้งในสถานการณ์ต่าง ๆ ได้อย่างเหมาะสม',c:[
+   {n:'4.4.1 วิเคราะห์สถานการณ์ปัญหาและมีการจัดการได้เหมาะสม'}]},
+  {n:'4.5 ปรับตัวต่อการเปลี่ยนแปลงทางสังคมและสภาพแวดล้อม',c:[
+   {n:'4.5.1 ติดตามข่าวสาร เหตุการณ์ปัจจุบันของสังคมโลก'},
+   {n:'4.5.2 ปรับตัวต่อการเปลี่ยนแปลงทางสังคมสภาพแวดล้อม'}]},
+  {n:'4.6 หลีกเลี่ยงพฤติกรรมไม่พึงประสงค์ที่ส่งผลกระทบต่อตนเองและผู้อื่น',c:[
+   {n:'4.6.1 รู้จักป้องกัน หลีกเลี่ยงพฤติกรรมเสี่ยงต่อสุขภาพ'},
+   {n:'4.6.2 จัดการกับอารมณ์และความเครียดได้อย่างถูกต้อง'}]}
+ ]},
+ {n:'5. ความสามารถในการใช้เทคโนโลยี',c:[
+  {n:'5.1 เลือกและใช้เทคโนโลยีเพื่อพัฒนาตนเองและสังคม',c:[
+   {n:'5.1.1 เลือกและใช้เทคโนโลยีในการเรียนรู้อย่างสร้างสรรค์และมีคุณธรรม'},
+   {n:'5.1.2 เลือกและใช้เทคโนโลยีในการสื่อสารอย่างสร้างสรรค์และมีคุณธรรม'},
+   {n:'5.1.3 เลือกและใช้เทคโนโลยีในการทำงานอย่างสร้างสรรค์และมีคุณธรรม'},
+   {n:'5.1.4 การเลือกและใช้เทคโนโลยีในการแก้ปัญหาอย่างสร้างสรรค์'}]},
+  {n:'5.2 มีทักษะกระบวนการทางเทคโนโลยี',c:[
+   {n:'5.2.1 การกำหนดปัญหาหรือความต้องการ'},
+   {n:'5.2.2 การรวบรวมข้อมูล'},
+   {n:'5.2.3 เลือกวิธีการ'},
+   {n:'5.2.4 การออกแบบและปฏิบัติการ'},
+   {n:'5.2.5 ทดสอบ'},
+   {n:'5.2.6 ปรับปรุงแก้ไขงาน'},
+   {n:'5.2.7 การประเมิน'}]}
+ ]}
+];
+
+const SR = [
+ {n:'1. ความสามารถในการสื่อสาร',c:[
+  {n:'1.1 ใช้ภาษาถ่ายทอดความรู้ความเข้าใจ ความคิด ความรู้สึก และทัศนะของตนเอง ด้วยการพูดและการเขียน',c:[
+   {n:'1.1.1 พูดถ่ายทอดความรู้ ความเข้าใจจากสารที่อ่าน ฟัง หรือดูด้วยภาษาของตนเองพร้อมยกตัวอย่างประกอบได้'},
+   {n:'1.1.2 พูดถ่ายทอดความคิด ความรู้สึกและทัศนะของตนเองจากสารที่อ่าน ฟัง หรือดูด้วยภาษาของตนเองพร้อมยกตัวอย่างประกอบได้'},
+   {n:'1.1.3 เขียนถ่ายทอดความรู้ ความเข้าใจจากสารที่อ่าน ฟังหรือดูด้วยภาษาของตนเองพร้อมยกตัวอย่างประกอบได้'},
+   {n:'1.1.4 เขียนถ่ายทอดความคิด ความรู้สึกและทัศนะของตนเองจากสารที่อ่าน ฟัง หรือดูด้วยภาษาของตนเองพร้อมยกตัวอย่างประกอบได้'}]},
+  {n:'1.2 พูดเจรจาต่อรอง',c:[
+   {n:'1.2.1 พูดเจรจาโน้มน้าว ต่อรองเพื่อประโยชน์ต่อตนเองและสังคม'},
+   {n:'1.2.2 พูดเจรจาโน้มน้าว ต่อรองเพื่อขจัดและลดปัญหาความขัดแย้ง'}]},
+  {n:'1.3 เลือกรับหรือไม่รับข้อมูลข่าวสาร',c:[
+   {n:'1.3.1 รับรู้ข้อมูลข่าวสารอย่างมีวิจารณญาณ'},
+   {n:'1.3.2 ตัดสินใจเลือกรับหรือไม่รับข้อมูลข่าวสารได้อย่างมีเหตุผล'}]},
+  {n:'1.4 เลือกใช้วิธีการสื่อสาร',c:[
+   {n:'1.4.1 เลือกใช้วิธีการสื่อสารที่มีประสิทธิภาพโดยคำนึงถึงผลกระทบ'}]}
+ ]},
+ {n:'2. ความสามารถในการคิด',c:[
+  {n:'2.1 คิดพื้นฐาน',c:[
+   {n:'2.1.1 จำแนก จัดหมวดหมู่ จัดลำดับความสำคัญ และเปรียบเทียบข้อมูลในบริบทต่าง ๆ'},
+   {n:'2.1.2 เชื่อมโยงความสัมพันธ์ของส่วนประกอบต่าง ๆ ของข้อมูลในบริบทต่าง ๆ'},
+   {n:'2.1.3 ระบุหลักการสำคัญ หรือแนวคิดในเนื้อหาความรู้ ข้อมูลที่พบเห็นในบริบทต่าง ๆ'}]},
+  {n:'2.2 คิดขั้นสูง',c:[
+   {n:'2.2.1 คิดสังเคราะห์เพื่อประกอบการวางแผน ออกแบบ ปรับปรุง คาดการณ์ ประเมินผลข้อสรุป'},
+   {n:'2.2.2 คิดอย่างสร้างสรรค์เพื่อนำไปสู่การประยุกต์สร้างสิ่งใหม่ในทางบวก'},
+   {n:'2.2.3 คิดอย่างมีวิจารณญาณ เพื่อตัดสินใจเลือกทางเลือกที่หลากหลาย'}]}
+ ]},
+ {n:'3. ความสามารถในการแก้ปัญหา',c:[
+  {n:'3.1 ใช้กระบวนการแก้ปัญหาโดยการวิเคราะห์ปัญหา วางแผนในการแก้ปัญหา ดำเนินการแก้ปัญหา ตรวจสอบและสรุปผล',c:[
+   {n:'3.1.1 วิเคราะห์ปัญหา',c:[
+    {n:'3.1.1.1 ระบุปัญหาที่เกิดขึ้นกับตนเอง'},
+    {n:'3.1.1.2 ระบุปัญหาที่เกิดขึ้นกับบุคคลใกล้ตัว'},
+    {n:'3.1.1.3 ระบุสาเหตุของปัญหา'},
+    {n:'3.1.1.4 จัดระบบข้อมูล',c:[
+     {n:'3.1.1.4.1 จำแนกและจัดหมวดหมู่'},
+     {n:'3.1.1.4.2 จัดลำดับความสำคัญ'},
+     {n:'3.1.1.4.3 เชื่อมโยงความสัมพันธ์'}]},
+    {n:'3.1.1.5 การตั้งสมมติฐาน'},
+    {n:'3.1.1.6 การกำหนดทางเลือก'},
+    {n:'3.1.1.7 การตัดสินใจเลือกวิธีการ'}]},
+   {n:'3.1.2 การวางแผนในการแก้ปัญหา',c:[
+    {n:'3.1.2.1 วางแผน'},
+    {n:'3.1.2.2 กำหนดขั้นตอน'}]},
+   {n:'3.1.3 การดำเนินการแก้ปัญหา',c:[
+    {n:'3.1.3.1 ปฏิบัติตามแผน'},
+    {n:'3.1.3.2 ตรวจสอบทบทวนแผน'},
+    {n:'3.1.3.3 บันทึกผลการปฏิบัติ'}]},
+   {n:'3.1.4 สรุปผลและรายงาน'}]},
+  {n:'3.2 ผลลัพธ์ที่เกิดจากการแก้ปัญหา',c:[
+   {n:'3.2.1 คุณภาพของผลงานที่เกิดจากการแก้ปัญหา'},
+   {n:'3.2.2 ประยุกต์ใช้'},
+   {n:'3.2.3 ผลกระทบเชิงสร้างสรรค์'}]}
+ ]},
+ {n:'4. ความสามารถในการใช้ทักษะชีวิต',c:[
+  {n:'4.1 นำกระบวนการเรียนรู้ที่หลากหลายไปใช้ในชีวิตประจำวัน',c:[
+   {n:'4.1.1 นำความรู้ ทักษะ และกระบวนการที่หลากหลายมาสร้างผลงาน/โครงงาน'}]},
+  {n:'4.2 เรียนรู้ด้วยตนเองและเรียนรู้อย่างต่อเนื่อง',c:[
+   {n:'4.2.1 มีทักษะในการแสวงหาความรู้ ข้อมูล ข่าวสาร'},
+   {n:'4.2.2 สามารถเชื่อมโยงความรู้'},
+   {n:'4.2.3 มีการเรียนรู้อย่างต่อเนื่อง'}]},
+  {n:'4.3 ทำงานและอยู่ร่วมกันในสังคมอย่างมีความสุข',c:[
+   {n:'4.3.1 ทำงานร่วมกับผู้อื่นอย่างสร้างสรรค์'},
+   {n:'4.3.2 ใช้ภาษากิริยาท่าทางเหมาะสมกับบุคคลและโอกาส'},
+   {n:'4.3.3 มีจิตสำนึก รับผิดชอบ ปฏิบัติตามกฎ กติกา สิทธิ และหน้าที่'},
+   {n:'4.3.4 แสดงออกถึงความรัก เอื้ออาทร'},
+   {n:'4.3.5 อยู่ร่วมกับผู้อื่นในสังคมได้อย่างมีความสุข'}]},
+  {n:'4.4 จัดการกับปัญหาและความขัดแย้งในสถานการณ์ต่าง ๆ ได้อย่างเหมาะสม',c:[
+   {n:'4.4.1 วิเคราะห์สถานการณ์ปัญหาและมีการจัดการได้เหมาะสม'}]},
+  {n:'4.5 ปรับตัวต่อการเปลี่ยนแปลงทางสังคมและสภาพแวดล้อม',c:[
+   {n:'4.5.1 ติดตามข่าวสาร เหตุการณ์ปัจจุบันของสังคม'},
+   {n:'4.5.2 ปรับตัวต่อการเปลี่ยนแปลงทางสังคมสภาพแวดล้อม'}]},
+  {n:'4.6 หลีกเลี่ยงพฤติกรรมไม่พึงประสงค์ที่ส่งผลกระทบต่อตนเองและผู้อื่น',c:[
+   {n:'4.6.1 รู้จักป้องกัน หลีกเลี่ยงพฤติกรรมเสี่ยงต่อสุขภาพ'},
+   {n:'4.6.2 สามารถจัดการกับอารมณ์และความเครียดได้อย่างถูกต้อง'}]}
+ ]},
+ {n:'5. ความสามารถในการใช้เทคโนโลยี',c:[
+  {n:'5.1 เลือกและใช้เทคโนโลยีเพื่อพัฒนาตนเองและสังคม',c:[
+   {n:'5.1.1 เลือกและใช้เทคโนโลยีในการเรียนรู้อย่างสร้างสรรค์และมีคุณธรรม'},
+   {n:'5.1.2 เลือกและใช้เทคโนโลยีในการสื่อสารอย่างสร้างสรรค์และมีคุณธรรม'},
+   {n:'5.1.3 เลือกและใช้เทคโนโลยีในการทำงานอย่างสร้างสรรค์และมีคุณธรรม'},
+   {n:'5.1.4 การเลือกและใช้เทคโนโลยีในการแก้ปัญหาอย่างสร้างสรรค์'}]},
+  {n:'5.2 มีทักษะกระบวนการทางเทคโนโลยี',c:[
+   {n:'5.2.1 กำหนดปัญหาหรือความต้องการ'},
+   {n:'5.2.2 รวบรวมข้อมูล'},
+   {n:'5.2.3 เลือกวิธีการ'},
+   {n:'5.2.4 ออกแบบและปฏิบัติการ'},
+   {n:'5.2.5 ทดสอบ'},
+   {n:'5.2.6 ปรับปรุงแก้ไขงาน'},
+   {n:'5.2.7 ประเมินผล'}]}
+ ]}
+];
+
+const buildTree = n => ({id:uid(), name:n.n, children:(n.c||[]).map(buildTree)});
+
+// =================== DATABASE & LOCAL STORAGE ===================
+const DEFAULT_DB = {
+  settings: {
+    logo: null,
+    primary: '#10b981',
+    secondary: '#fbbf24',
+    gasUrl: 'https://script.google.com/macros/s/AKfycbwXcDGvdPeCbi7-YsD13_H8UDZAQtaGERpM-Ce52uVrV-6UW96rcpktYyBhwPUxhmtAUA/exec', // Google Apps Script Web App URL
+    driveFolderId: DRIVE_FOLDER_ID
+  },
+  users: [
+    {id:'u-admin', username:'admin', password:'admin1234', name:'ผู้ดูแลระบบ', role:'admin', position:''},
+    {id:'u-t1', username:'teacher1', password:'1234', name:'ครูสมศรี ใจดี', role:'teacher', position:'ครูชำนาญการ'}
+  ],
+  terms: [{id:'t1', semester:1, year:2567, current:true}],
+  subjectGroups: [
+    {id:'g1', name:'ภาษาไทย'},{id:'g2', name:'คณิตศาสตร์'},{id:'g3', name:'วิทยาศาสตร์และเทคโนโลยี'},
+    {id:'g4', name:'สังคมศึกษา ศาสนา และวัฒนธรรม'},{id:'g5', name:'สุขศึกษาและพลศึกษา'},
+    {id:'g6', name:'ศิลปะ'},{id:'g7', name:'การงานอาชีพ'},{id:'g8', name:'ภาษาต่างประเทศ'}
+  ],
+  subjects: [
+    {id:'s1', name:'ภาษาไทย 1', groupId:'g1'},
+    {id:'s2', name:'คณิตศาสตร์พื้นฐาน 1', groupId:'g2'},
+    {id:'s3', name:'วิทยาศาสตร์ 1', groupId:'g3'}
+  ],
+  levels: [
+    {id:'lv1', name:'ม.1', type:'junior'},{id:'lv2', name:'ม.2', type:'junior'},{id:'lv3', name:'ม.3', type:'junior'},
+    {id:'lv4', name:'ม.4', type:'senior'},{id:'lv5', name:'ม.5', type:'senior'},{id:'lv6', name:'ม.6', type:'senior'}
+  ],
+  classes: [
+    {id:'c1', name:'ม.1/1', levelId:'lv1'},
+    {id:'c2', name:'ม.1/2', levelId:'lv1'},
+    {id:'c3', name:'ม.2/1', levelId:'lv2'},
+    {id:'c4', name:'ม.4/1', levelId:'lv4'}
+  ],
+  students: [
+    {id:'st1', classId:'c1', number:1, name:'เด็กชาย กิตติกร ยิ่งยง'},
+    {id:'st2', classId:'c1', number:2, name:'เด็กหญิง ภัทรวดี มั่งมี'},
+    {id:'st3', classId:'c1', number:3, name:'เด็กชาย ธนพล ก้องเกียรติ'},
+    {id:'st4', classId:'c3', number:1, name:'เด็กชาย ภาคิน สุขสวัสดิ์'},
+    {id:'st5', classId:'c3', number:2, name:'เด็กหญิง สุชาดา งดงาม'}
+  ],
+  topics: {junior:JR.map(buildTree), senior:SR.map(buildTree)},
+  assessments: [],
+  activityLogs: []
+};
+
+let db;
+function loadDB(){
+  const raw = localStorage.getItem('assessApp_v2');
+  if(raw){ try{ db=JSON.parse(raw); }catch(e){ db=null; } }
+  if(!db){ db=JSON.parse(JSON.stringify(DEFAULT_DB)); saveDB(); }
+  if(!db.topics) db.topics={junior:JR.map(buildTree), senior:SR.map(buildTree)};
+  if(!db.settings) db.settings={logo:null, primary:'#10b981', secondary:'#fbbf24', gasUrl:'', driveFolderId:DRIVE_FOLDER_ID};
+  if(!db.settings.driveFolderId) db.settings.driveFolderId = DRIVE_FOLDER_ID;
+  if(!db.assessments) db.assessments=[];
+  if(!db.activityLogs) db.activityLogs=[];
+}
+function saveDB(){ localStorage.setItem('assessApp_v2', JSON.stringify(db)); }
+
+// =================== GOOGLE SHEETS & DRIVE SYNC API ===================
+async function apiCall(action, payload={}) {
+  const url = db.settings.gasUrl;
+  if(!url){
+    console.warn('ยังไม่ได้ระบุ Google Apps Script Web App URL');
+    return null;
+  }
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, ...payload })
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('API Error:', err);
+    throw err;
+  }
+}
+
+// =================== TREE HELPERS ===================
+function flattenLeaves(nodes, path=[]){
+  let out=[];
+  for(const n of nodes){
+    const p=[...path, n];
+    if(!n.children || n.children.length===0) out.push({node:n, path:p});
+    else out=out.concat(flattenLeaves(n.children, p));
+  }
+  return out;
+}
+function findNode(nodes, id){
+  for(const n of nodes){
+    if(n.id===id) return n;
+    if(n.children){ const f=findNode(n.children, id); if(f) return f; }
+  }
+  return null;
+}
+function findPath(nodes, id, path=[]){
+  for(const n of nodes){
+    if(n.id===id) return [...path, n];
+    if(n.children){ const f=findPath(n.children, id, [...path, n]); if(f) return f; }
+  }
+  return null;
+}
+function computeNodeAvg(node, scores){
+  if(!node.children || node.children.length===0){
+    return scores.has(node.id) ? scores.get(node.id) : null;
+  }
+  const c = node.children.map(ch => computeNodeAvg(ch, scores)).filter(v => v != null);
+  return c.length ? avg(c) : null;
+}
+function studentScores(studentId, termId, type){
+  const scores = new Map();
+  const tmp = {};
+  db.assessments.filter(a => a.studentId===studentId && a.termId===termId && a.type===type)
+    .forEach(a => { (tmp[a.topicId] = tmp[a.topicId] || []).push(a.score); });
+  Object.entries(tmp).forEach(([k, v]) => scores.set(k, avg(v)));
+  return scores;
+}
+function studentOverall(studentId, termId, type){
+  const scores = studentScores(studentId, termId, type);
+  const tree = db.topics[type] || [];
+  const roots = tree.map(t => computeNodeAvg(t, scores)).filter(v => v != null);
+  return roots.length ? avg(roots) : null;
+}
+
+// =================== STATE & ROUTER ===================
+let state = {
+  view: 'home',
+  user: null,
+  adminTab: 'dashboard',
+  teacherTab: 'dashboard',
+  topicType: 'junior',
+  pubSelectedClasses: [],
+  adminSelectedClasses: [],
+  teacherSelectedClasses: [],
+  activityLimit: 10 // แสดงทีละ 10 รายการ
+};
+
+function navigate(v){ state.view = v; render(); }
+
+function render(){
+  const app = $('#app');
+  if(state.view === 'home') app.innerHTML = viewHome();
+  else if(state.view === 'public-dash') app.innerHTML = viewPublicDash();
+  else if(state.view === 'admin') app.innerHTML = viewAdmin();
+  else if(state.view === 'teacher') app.innerHTML = viewTeacher();
+  app.innerHTML += footerHTML();
+  setTimeout(postRenderHooks, 50);
+}
+
+function postRenderHooks(){
+  if(state.view === 'public-dash') renderPublicDashData();
+  if(state.view === 'admin' && state.adminTab === 'dashboard') renderAdminDashData();
+  if(state.view === 'teacher' && state.teacherTab === 'dashboard') renderTeacherDash();
+  if(state.view === 'teacher' && state.teacherTab === 'assess') renderAssessBody();
+}
+
+function footerHTML(){
+  return `<footer class="mt-12 pb-8 text-center text-xs text-slate-500">
+    <div class="max-w-5xl mx-auto px-4 py-4 border-t border-slate-200">
+      กลุ่มบริหารงานวิชาการ โรงเรียนเสาไห้ "วิมลวิทยานุกูล"
+      <span class="block mt-1 text-[11px] text-slate-400">ระบบประเมินสมรรถนะสำคัญของผู้เรียนแบบหลายคนพร้อมกัน พร้อมฐานข้อมูล Google Sheets & Drive</span>
+    </div>
+  </footer>`;
+}
+
+// =================== HOME ===================
+function viewHome(){
+  const logo = db.settings.logo 
+    ? `<img src="${db.settings.logo}" class="w-32 h-32 object-contain mx-auto rounded-full shadow-md bg-white p-1">`
+    : `<div class="w-32 h-32 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 mx-auto flex items-center justify-center text-white text-4xl font-bold shadow-lg">ว</div>`;
+  return `<div class="min-h-screen flex flex-col bg-slate-50">
+    <header class="bg-white shadow-sm border-b">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-bold text-emerald-800">🏫 โรงเรียนเสาไห้ "วิมลวิทยานุกูล"</span>
+        </div>
+        <button onclick="openLoginModal()" class="btn-primary px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 shadow">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+          เข้าสู่ระบบ
+        </button>
+      </div>
+    </header>
+    <main class="flex-1 flex items-center justify-center px-4 py-12">
+      <div class="text-center max-w-2xl">
+        ${logo}
+        <h1 class="mt-6 text-2xl md:text-3xl font-extrabold text-slate-800">ระบบประเมินสมรรถนะสำคัญของผู้เรียน</h1>
+        <h2 class="mt-2 text-lg md:text-xl text-primary font-bold">โรงเรียนเสาไห้ "วิมลวิทยานุกูล"</h2>
+        <p class="mt-3 text-slate-600 text-sm">ประเมินสมรรถนะสำคัญ 5 ด้าน ระดับ ม.ต้น และ ม.ปลาย พร้อมสรุปสถิติ กราฟเปรียบเทียบรายชั้น และบันทึกลง Google Sheets</p>
+        <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+          <button onclick="navigate('public-dash')" class="btn-primary px-6 py-3 rounded-xl font-semibold shadow-lg shadow-emerald-200 flex items-center gap-2 justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+            ดูแดชบอร์ดสมรรถนะ
+          </button>
+          <button onclick="openLoginModal()" class="btn-outline px-6 py-3 rounded-xl font-semibold flex items-center gap-2 justify-center">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            เข้าสู่ระบบ (ครู/ผู้ดูแล)
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>`;
+}
+
+function openLoginModal(){
+  Swal.fire({
+    title: 'เข้าสู่ระบบ',
+    html: `<div class="text-left space-y-3">
+      <div><label class="text-xs font-semibold text-slate-600">ชื่อผู้ใช้</label>
+      <input id="li-u" class="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder="เช่น admin หรือ teacher1"></div>
+      <div><label class="text-xs font-semibold text-slate-600">รหัสผ่าน</label>
+      <input id="li-p" type="password" class="w-full mt-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500" placeholder="password"></div>
+      <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer"><input type="checkbox" id="li-remember" class="rounded text-emerald-600"> จดจำการเข้าสู่ระบบ</label>
+      <p class="text-xs text-slate-400">ค่าเริ่มต้น: แอดมิน (admin/admin1234), ครู (teacher1/1234)</p>
+    </div>`,
+    showCancelButton: true, confirmButtonText: 'เข้าสู่ระบบ', cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: db.settings.primary,
+    didOpen: () => {
+      const r = JSON.parse(localStorage.getItem('rememberLogin')||'null');
+      if(r){ $('#li-u').value=r.u; $('#li-p').value=r.p; $('#li-remember').checked=true; }
+    },
+    preConfirm: () => {
+      const u = $('#li-u').value.trim(), p = $('#li-p').value;
+      const user = db.users.find(x => x.username===u && x.password===p);
+      if(!user){ Swal.showValidationMessage('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'); return false; }
+      if($('#li-remember').checked) localStorage.setItem('rememberLogin', JSON.stringify({u,p}));
+      else localStorage.removeItem('rememberLogin');
+      return user;
+    }
+  }).then(r => {
+    if(r.isConfirmed){
+      state.user = r.value;
+      state.view = r.value.role === 'admin' ? 'admin' : 'teacher';
+      state.adminTab = 'dashboard'; state.teacherTab = 'dashboard';
+      toast('success', 'เข้าสู่ระบบสำเร็จ');
+      render();
+    }
+  });
+}
+
+// =================== DASHBOARDS & CHARTS ===================
+let pubLevelChart = null;
+let pubClassChart = null;
+
+function viewPublicDash(){
+  const currentTerm = db.terms.find(t=>t.current) || db.terms[0];
+  return `<div class="min-h-screen">
+    ${dashHeader('แดชบอร์ดสมรรถนะสำคัญของผู้เรียน', 'public')}
+    <main class="max-w-7xl mx-auto px-4 py-6">
+      <div class="card p-4 mb-5 flex flex-wrap gap-3 items-center justify-between">
+        <div class="flex items-center gap-3">
+          <label class="text-sm text-slate-700 font-semibold">เลือกภาคเรียน/ปีการศึกษา:</label>
+          <select id="pub-term" onchange="renderPublicDashData()" class="px-3 py-2 border rounded-lg text-sm bg-white font-medium">
+            ${db.terms.map(t=>`<option value="${t.id}" ${t.id===currentTerm?.id?'selected':''}>ภาคเรียนที่ ${t.semester}/${t.year}</option>`).join('')}
+          </select>
+        </div>
+        <div class="flex flex-wrap gap-2 text-xs">
+          <span class="badge q-3">3 ดีเยี่ยม (2.50 - 3.00)</span>
+          <span class="badge q-2">2 ดี (1.50 - 2.49)</span>
+          <span class="badge q-1">1 ผ่าน (0.50 - 1.49)</span>
+          <span class="badge q-0">0 ปรับปรุง (&lt; 0.50)</span>
+        </div>
+      </div>
+      <div id="pub-content">${skeletonList(6)}</div>
+    </main>
+  </div>`;
+}
+
+function renderPublicDashData(){
+  const termId = $('#pub-term')?.value;
+  if(!termId) return;
+  setTimeout(() => {
+    const data = computeDashboard(termId);
+    const el = $('#pub-content');
+    if(!el) return;
+    
+    el.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        ${kpiCard('ภาพรวมทั้งโรงเรียน', data.school)}
+        ${kpiCard('ระดับ ม.ต้น (ม.1 - ม.3)', data.junior)}
+        ${kpiCard('ระดับ ม.ปลาย (ม.4 - ม.6)', data.senior)}
+      </div>
+
+      <!-- กราฟที่ 1: ภาพรวมระดับชั้น -->
+      <div class="card p-5 mb-6">
+        <div class="text-center mb-3">
+          <h3 class="font-bold text-slate-800 text-base">กราฟสรุปภาพรวมระดับคุณภาพและค่าเฉลี่ยแยกตามระดับชั้น</h3>
+          <p class="text-xs text-slate-500">มัธยมศึกษาปีที่ 1 ถึง 6</p>
+        </div>
+        <div class="relative h-72"><canvas id="pub-level-chart"></canvas></div>
+      </div>
+
+      <!-- กราฟที่ 2: สรุปรายชั้นเรียน (ห้องเรียน) -->
+      <div class="card p-5">
+        <div class="text-center mb-3">
+          <h3 class="font-bold text-slate-800 text-base">กราฟสรุปค่าเฉลี่ยรายชั้นเรียน (ห้องเรียน)</h3>
+          <p class="text-xs text-slate-500">เลือกชั้นเรียนที่ต้องการเปรียบเทียบ เช่น ม.1/1, ม.2/1 (ถ้าไม่เลือกจะไม่แสดงข้อมูล)</p>
+        </div>
+        
+        <!-- ตัวเลือกห้องเรียน -->
+        <div class="bg-slate-50 p-3 rounded-xl border mb-4">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <span class="text-xs font-semibold text-slate-700">เลือกห้องเรียนที่ต้องการแสดง:</span>
+            <div class="flex gap-2">
+              <button onclick="selectAllDashClasses('pub', true)" class="text-xs text-emerald-600 font-semibold hover:underline">เลือกทั้งหมด</button>
+              <span class="text-slate-300">|</span>
+              <button onclick="selectAllDashClasses('pub', false)" class="text-xs text-rose-500 font-semibold hover:underline">ล้างการเลือก</button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2" id="pub-class-selector">
+            ${db.classes.map(c => `
+              <label class="cursor-pointer text-xs font-medium px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 transition ${state.pubSelectedClasses.includes(c.id)?'bg-emerald-100 border-emerald-400 text-emerald-800 font-bold':'bg-white text-slate-600 border-slate-200'}">
+                <input type="checkbox" value="${c.id}" ${state.pubSelectedClasses.includes(c.id)?'checked':''} onchange="toggleDashClass('pub', '${c.id}')" class="rounded text-emerald-600 focus:ring-emerald-500">
+                ${esc(c.name)}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div id="pub-class-chart-wrap">
+          ${state.pubSelectedClasses.length === 0 ? `
+            <div class="p-10 text-center text-slate-400 border border-dashed rounded-xl bg-slate-50">
+              <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+              <p class="font-medium text-sm">ยังไม่ได้เลือกชั้นเรียน</p>
+              <p class="text-xs mt-1">กรุณาคลิกเลือกห้องเรียนด้านบนเพื่อเปรียบเทียบกราฟค่าเฉลี่ย</p>
+            </div>
+          ` : `
+            <div class="relative h-80"><canvas id="pub-class-chart"></canvas></div>
+          `}
+        </div>
+      </div>
+    `;
+
+    renderPublicCharts(termId);
+  }, 100);
+}
+
+function toggleDashClass(scope, classId){
+  const arr = scope==='pub' ? state.pubSelectedClasses : scope==='admin' ? state.adminSelectedClasses : state.teacherSelectedClasses;
+  const idx = arr.indexOf(classId);
+  if(idx > -1) arr.splice(idx, 1);
+  else arr.push(classId);
+
+  if(scope === 'pub') renderPublicDashData();
+  else if(scope === 'admin') renderAdminDashData();
+  else renderTeacherDash();
+}
+
+function selectAllDashClasses(scope, selectAll){
+  const allIds = selectAll ? db.classes.map(c => c.id) : [];
+  if(scope === 'pub') state.pubSelectedClasses = allIds;
+  else if(scope === 'admin') state.adminSelectedClasses = allIds;
+  else state.teacherSelectedClasses = allIds;
+
+  if(scope === 'pub') renderPublicDashData();
+  else if(scope === 'admin') renderAdminDashData();
+  else renderTeacherDash();
+}
+
+function renderPublicCharts(termId){
+  const levelCanvas = $('#pub-level-chart');
+  if(!levelCanvas) return;
+  const data = computeDashboard(termId);
+
+  if(pubLevelChart) pubLevelChart.destroy();
+  pubLevelChart = new Chart(levelCanvas, {
+    type: 'bar',
+    data: {
+      labels: data.byLevel.map(x => x.name),
+      datasets: [{
+        label: 'ค่าเฉลี่ยสมรรถนะ',
+        data: data.byLevel.map(x => x.avg),
+        backgroundColor: db.settings.primary,
+        borderRadius: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: { y: { beginAtZero: true, max: 3, ticks: { stepSize: 0.5 } } }
+    }
+  });
+
+  // Render Class Chart ถ้ามีห้องถูกเลือก
+  const classCanvas = $('#pub-class-chart');
+  if(classCanvas && state.pubSelectedClasses.length > 0){
+    const classData = computeClassStats(termId, state.pubSelectedClasses);
+    if(pubClassChart) pubClassChart.destroy();
+    pubClassChart = new Chart(classCanvas, {
+      type: 'bar',
+      data: {
+        labels: classData.map(c => c.name),
+        datasets: [{
+          label: 'ค่าเฉลี่ยสมรรถนะห้องเรียน',
+          data: classData.map(c => c.avg),
+          backgroundColor: '#3b82f6',
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, max: 3, ticks: { stepSize: 0.5 } } }
+      }
+    });
+  }
+}
+
+function computeClassStats(termId, classIds){
+  return classIds.map(cid => {
+    const cls = db.classes.find(c => c.id === cid);
+    const lv = db.levels.find(l => l.id === cls?.levelId);
+    const sts = db.students.filter(s => s.classId === cid);
+    const vals = [];
+    sts.forEach(s => {
+      const v = studentOverall(s.id, termId, lv?.type || 'junior');
+      if(v != null) vals.push(v);
+    });
+    const a = avg(vals);
+    return {
+      name: cls ? cls.name : '?',
+      avg: a != null ? Number(a.toFixed(2)) : 0,
+      count: vals.length
+    };
+  });
+}
+
+function kpiCard(title, d){
+  return `<div class="card p-5 fade-in text-center border-t-4 border-t-emerald-500">
+    <p class="text-xs font-bold text-slate-500 uppercase tracking-wide">${title}</p>
+    <div class="mt-2 flex items-baseline gap-2 justify-center">
+      <span class="text-3xl font-extrabold text-slate-800">${d.avg != null ? d.avg.toFixed(2) : '-'}</span>
+      <span class="text-xs text-slate-400">/ 3.00</span>
+    </div>
+    <div class="mt-2">${qBadge(d.level, d.avg)}</div>
+    <p class="mt-2 text-xs text-slate-400 font-medium">ประเมินแล้ว ${d.count} คน</p>
+  </div>`;
+}
+
+function computeDashboard(termId){
+  const calcLevel = (lt) => {
+    const lvIds = db.levels.filter(l => l.type === lt).map(l => l.id);
+    const clsIds = db.classes.filter(c => lvIds.includes(c.levelId)).map(c => c.id);
+    const sts = db.students.filter(s => clsIds.includes(s.classId));
+    const vals = [];
+    sts.forEach(s => {
+      const v = studentOverall(s.id, termId, lt);
+      if(v != null) vals.push(v);
+    });
+    const a = avg(vals);
+    return {avg: a, level: qf(a), count: vals.length};
+  };
+
+  const allVals = [];
+  const seen = new Set();
+  db.students.forEach(s => {
+    const vj = studentOverall(s.id, termId, 'junior');
+    const vs = studentOverall(s.id, termId, 'senior');
+    if(vj != null) allVals.push(vj);
+    if(vs != null) allVals.push(vs);
+    if(vj != null || vs != null) seen.add(s.id);
+  });
+  const schoolAvg = avg(allVals);
+  const school = {avg: schoolAvg, level: qf(schoolAvg), count: seen.size};
+
+  const byLevel = db.levels.map(l => {
+    const clsIds = db.classes.filter(c => c.levelId === l.id).map(c => c.id);
+    const sts = db.students.filter(s => clsIds.includes(s.classId));
+    const vals = [];
+    sts.forEach(s => {
+      const v = studentOverall(s.id, termId, l.type);
+      if(v != null) vals.push(v);
+    });
+    return {name: l.name, avg: avg(vals), level: qf(avg(vals)), count: vals.length};
+  });
+
+  return {school, junior: calcLevel('junior'), senior: calcLevel('senior'), byLevel};
+}
+
+// =================== ADMIN SYSTEM ===================
+function viewAdmin(){
+  if(!state.user || state.user.role !== 'admin'){
+    return `<div class="p-10 text-center font-bold text-slate-600">กรุณาเข้าสู่ระบบด้วยสิทธิ์ผู้ดูแลระบบ</div>`;
+  }
+  const tabs = [
+    ['dashboard', 'แดชบอร์ด', '📊'],
+    ['users', 'จัดการผู้ใช้', '👥'],
+    ['terms', 'ภาคเรียน/ปี', '📅'],
+    ['subjects', 'รายวิชา', '📚'],
+    ['classes', 'ชั้นเรียน/นักเรียน', '🏫'],
+    ['topics', 'หัวข้อสมรรถนะ', '📋'],
+    ['search', 'ค้นหาผล', '🔍'],
+    ['activity', 'กิจกรรมครู', '🧑🏫'],
+    ['settings', 'ตั้งค่า & Google Sheets', '⚙️']
+  ];
+  return `<div class="min-h-screen">
+    ${dashHeader('ระบบผู้ดูแลระบบ (Admin Console)', 'admin')}
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex flex-wrap gap-1.5 mb-4 overflow-x-auto pb-1">
+        ${tabs.map(([k, l, ic]) => `
+          <button onclick="state.adminTab='${k}';render()" class="px-3.5 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition shadow-sm ${state.adminTab===k ? 'tab-active shadow-emerald-200' : 'bg-white text-slate-600 hover:bg-slate-100'}">
+            ${ic} ${l}
+          </button>
+        `).join('')}
+      </div>
+      <div id="admin-content">${adminContent()}</div>
+    </div>
+  </div>`;
+}
+
+function adminContent(){
+  switch(state.adminTab){
+    case 'dashboard': return adminDashboard();
+    case 'users': return adminUsers();
+    case 'terms': return adminTerms();
+    case 'subjects': return adminSubjects();
+    case 'classes': return adminClasses();
+    case 'topics': return adminTopics();
+    case 'search': return adminSearch();
+    case 'activity': return adminActivity();
+    case 'settings': return adminSettings();
+    default: return '';
+  }
+}
+
+function adminDashboard(){
+  return `<div class="space-y-4">
+    <div class="card p-4 flex flex-wrap gap-3 items-center justify-between">
+      <div class="flex items-center gap-3">
+        <label class="text-sm font-semibold text-slate-700">ภาคเรียน/ปีการศึกษา:</label>
+        <select id="admin-term" onchange="renderAdminDashData()" class="px-3 py-2 border rounded-lg text-sm bg-white font-medium">
+          ${db.terms.map(t=>`<option value="${t.id}" ${t.current?'selected':''}>ภาคเรียนที่ ${t.semester}/${t.year}${t.current?' (ปัจจุบัน)':''}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div id="admin-dash-content">${skeletonList(6)}</div>
+  </div>`;
+}
+
+let adminLevelChart = null;
+let adminClassChart = null;
+
+function renderAdminDashData(){
+  const termId = $('#admin-term')?.value;
+  if(!termId) return;
+  setTimeout(() => {
+    const data = computeDashboard(termId);
+    const el = $('#admin-dash-content');
+    if(!el) return;
+
+    el.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        ${kpiCard('ทั้งโรงเรียน', data.school)}
+        ${kpiCard('ม.ต้น', data.junior)}
+        ${kpiCard('ม.ปลาย', data.senior)}
+      </div>
+
+      <div class="card p-5 mb-6">
+        <div class="text-center mb-3">
+          <h3 class="font-bold text-slate-800 text-base">กราฟสรุปภาพรวมระดับคุณภาพและค่าเฉลี่ยแยกตามระดับชั้น</h3>
+          <p class="text-xs text-slate-500">มัธยมศึกษาปีที่ 1 ถึง 6</p>
+        </div>
+        <div class="relative h-72"><canvas id="admin-level-chart"></canvas></div>
+      </div>
+
+      <!-- กราฟที่ 2: สรุปรายชั้นเรียน (ห้องเรียน) -->
+      <div class="card p-5">
+        <div class="text-center mb-3">
+          <h3 class="font-bold text-slate-800 text-base">กราฟสรุปค่าเฉลี่ยรายชั้นเรียน (ห้องเรียน)</h3>
+          <p class="text-xs text-slate-500">เลือกชั้นเรียนที่ต้องการเปรียบเทียบ เช่น ม.1/1, ม.2/1 (ถ้าไม่เลือกจะไม่แสดงข้อมูล)</p>
+        </div>
+        
+        <div class="bg-slate-50 p-3 rounded-xl border mb-4">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <span class="text-xs font-semibold text-slate-700">เลือกห้องเรียนที่ต้องการแสดง:</span>
+            <div class="flex gap-2">
+              <button onclick="selectAllDashClasses('admin', true)" class="text-xs text-emerald-600 font-semibold hover:underline">เลือกทั้งหมด</button>
+              <span class="text-slate-300">|</span>
+              <button onclick="selectAllDashClasses('admin', false)" class="text-xs text-rose-500 font-semibold hover:underline">ล้างการเลือก</button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${db.classes.map(c => `
+              <label class="cursor-pointer text-xs font-medium px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 transition ${state.adminSelectedClasses.includes(c.id)?'bg-emerald-100 border-emerald-400 text-emerald-800 font-bold':'bg-white text-slate-600 border-slate-200'}">
+                <input type="checkbox" value="${c.id}" ${state.adminSelectedClasses.includes(c.id)?'checked':''} onchange="toggleDashClass('admin', '${c.id}')" class="rounded text-emerald-600 focus:ring-emerald-500">
+                ${esc(c.name)}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div id="admin-class-chart-wrap">
+          ${state.adminSelectedClasses.length === 0 ? `
+            <div class="p-10 text-center text-slate-400 border border-dashed rounded-xl bg-slate-50">
+              <p class="font-medium text-sm">ยังไม่ได้เลือกชั้นเรียน</p>
+              <p class="text-xs mt-1">กรุณาคลิกเลือกห้องเรียนด้านบนเพื่อเปรียบเทียบกราฟค่าเฉลี่ย</p>
+            </div>
+          ` : `
+            <div class="relative h-80"><canvas id="admin-class-chart"></canvas></div>
+          `}
+        </div>
+      </div>
+    `;
+
+    renderAdminCharts(termId);
+  }, 100);
+}
+
+function renderAdminCharts(termId){
+  const el = $('#admin-level-chart');
+  if(!el) return;
+  const data = computeDashboard(termId);
+
+  if(adminLevelChart) adminLevelChart.destroy();
+  adminLevelChart = new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: data.byLevel.map(x => x.name),
+      datasets: [{label: 'ค่าเฉลี่ย', data: data.byLevel.map(x => x.avg), backgroundColor: db.settings.primary, borderRadius: 8}]
+    },
+    options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, max: 3}}}
+  });
+
+  const classCanvas = $('#admin-class-chart');
+  if(classCanvas && state.adminSelectedClasses.length > 0){
+    const classData = computeClassStats(termId, state.adminSelectedClasses);
+    if(adminClassChart) adminClassChart.destroy();
+    adminClassChart = new Chart(classCanvas, {
+      type: 'bar',
+      data: {
+        labels: classData.map(c => c.name),
+        datasets: [{
+          label: 'ค่าเฉลี่ยสมรรถนะห้องเรียน',
+          data: classData.map(c => c.avg),
+          backgroundColor: '#0284c7',
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, max: 3, ticks: { stepSize: 0.5 } } }
+      }
+    });
+  }
+}
+
+// ---- หน้ากิจกรรมครู (Activity Logs) แสดงทีละ 10 ล่าสุดอยู่อันแรก ----
+function adminActivity(){
+  // เรียงลำดับจากล่าสุดไปเก่าสุด
+  const logs = [...(db.activityLogs || [])].reverse();
+  const currentLimit = state.activityLimit || 10;
+  const displayedLogs = logs.slice(0, currentLimit);
+  const hasMore = logs.length > currentLimit;
+
+  return `<div class="card p-5">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <div>
+        <h3 class="font-bold text-slate-800 text-base">กิจกรรมการประเมินของครู (Teacher Activities)</h3>
+        <p class="text-xs text-slate-500">แสดงผลล่าสุดเป็นอันแรก (แสดงครั้งละ 10 รายการ ทั้งหมด ${logs.length} รายการ)</p>
+      </div>
+      ${logs.length > 0 ? `
+        <button onclick="clearActivityLogs()" class="text-xs text-rose-500 hover:text-rose-700 font-medium">ล้างประวัติกิจกรรม</button>
+      ` : ''}
+    </div>
+
+    ${displayedLogs.length === 0 ? `
+      <div class="text-center py-12 text-slate-400 bg-slate-50 rounded-xl border border-dashed">
+        <p class="text-sm font-medium">ยังไม่มีประวัติกิจกรรมการประเมิน</p>
+        <p class="text-xs mt-1">เมื่อครูกดปุ่ม "บันทึกผลการประเมิน" รายการกิจกรรมจะปรากฏที่นี่ทันที</p>
+      </div>
+    ` : `
+      <div class="space-y-3">
+        ${displayedLogs.map((log, idx) => `
+          <div class="border rounded-xl p-4 bg-white shadow-sm hover:border-emerald-300 transition flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="badge bg-slate-100 text-slate-700 text-xs font-semibold">#${logs.length - idx}</span>
+                <span class="font-bold text-slate-800 text-sm">${esc(log.teacherName || 'ไม่ระบุชื่อครู')}</span>
+                <span class="text-xs text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-medium">วิชา: ${esc(log.subjectName || '-')}</span>
+                <span class="text-xs text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 font-medium">ห้อง: ${esc(log.className || '-')}</span>
+                <span class="text-xs text-slate-500 font-medium">ภาคเรียนที่ ${esc(log.termString || '-')}</span>
+              </div>
+              <p class="text-xs text-slate-500">
+                ประเมินนักเรียน: <b>${log.studentCount || 0}</b> คน | ค่าเฉลี่ยรวม: <b>${log.averageScore != null ? Number(log.averageScore).toFixed(2) : '-'}</b> | ระดับ: <b>${esc(log.qualityLevel || '-')}</b>
+              </p>
+            </div>
+            <div class="text-right md:min-w-[140px]">
+              <span class="text-[11px] text-slate-400 block">${esc(log.timestamp || '-')}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      ${hasMore ? `
+        <div class="text-center mt-6">
+          <button onclick="loadMoreActivity()" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-semibold shadow flex items-center gap-2 mx-auto">
+            <span>แสดงเพิ่มอีก 10 รายการ</span>
+            <span class="bg-white/20 px-2 py-0.5 rounded text-[11px]">${logs.length - currentLimit} รายการที่เหลือ</span>
+          </button>
+        </div>
+      ` : logs.length > 10 ? `
+        <p class="text-center text-xs text-slate-400 mt-6">แสดงครบทั้งหมด ${logs.length} รายการแล้ว</p>
+      ` : ''}
+    `}
+  </div>`;
+}
+
+function loadMoreActivity(){
+  state.activityLimit = (state.activityLimit || 10) + 10;
+  render();
+}
+
+function clearActivityLogs(){
+  confirmDel('ยืนยันล้างประวัติกิจกรรม?', 'ข้อมูลประวัติกิจกรรมครูทั้งหมดจะถูกลบ').then(r => {
+    if(r.isConfirmed){
+      db.activityLogs = [];
+      saveDB();
+      toast('success', 'ล้างประวัติแล้ว');
+      render();
+    }
+  });
+}
+
+// ---- Manage Users ----
+function adminUsers(){
+  return `<div class="card p-5">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h3 class="font-bold text-slate-800 text-base">จัดการผู้ใช้งานในระบบ</h3>
+      <button onclick="openUserModal()" class="btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold shadow">+ เพิ่มผู้ใช้</button>
+    </div>
+    <div class="overflow-auto scroll-thin">
+      <table class="w-full">
+        <thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อ-นามสกุล</th><th>สิทธิ์</th><th>ตำแหน่ง</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          ${db.users.map(u => `<tr>
+            <td class="font-semibold text-slate-700">${esc(u.username)}</td>
+            <td>${esc(u.name)}</td>
+            <td><span class="badge ${u.role==='admin'?'q-3':'q-2'}">${u.role==='admin'?'ผู้ดูแลระบบ':'ครูผู้สอน'}</span></td>
+            <td class="text-slate-500">${esc(u.position||'-')}</td>
+            <td class="whitespace-nowrap">
+              <button onclick="openUserModal('${u.id}')" class="text-xs px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 mr-1.5 font-medium">แก้ไข</button>
+              ${u.role!=='admin'||db.users.filter(x=>x.role==='admin').length>1 ? `<button onclick="delUser('${u.id}')" class="text-xs px-2.5 py-1 rounded-lg bg-red-50 text-red-700 font-medium">ลบ</button>` : ''}
+            </td>
+          </tr>`).join('') || '<tr><td colspan="5" class="text-center text-slate-400 py-6">ไม่มีข้อมูล</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function openUserModal(id){
+  const u = id ? db.users.find(x => x.id === id) : null;
+  Swal.fire({
+    title: u ? 'แก้ไขข้อมูลผู้ใช้' : 'เพิ่มผู้ใช้งานใหม่',
+    html: `<div class="text-left space-y-3">
+      <div><label class="text-xs font-semibold text-slate-600">ชื่อผู้ใช้ (Username)</label><input id="u-u" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${u ? esc(u.username) : ''}"></div>
+      <div><label class="text-xs font-semibold text-slate-600">รหัสผ่าน</label><input id="u-p" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${u ? esc(u.password) : ''}"></div>
+      <div><label class="text-xs font-semibold text-slate-600">ชื่อ-นามสกุล</label><input id="u-n" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${u ? esc(u.name) : ''}"></div>
+      <div><label class="text-xs font-semibold text-slate-600">สิทธิ์การใช้งาน</label>
+        <select id="u-r" class="w-full mt-1 px-3 py-2 border rounded-lg" onchange="document.getElementById('u-pos-wrap').style.display=this.value==='teacher'?'block':'none'">
+          <option value="admin" ${u?.role==='admin'?'selected':''}>ผู้ดูแลระบบ (Admin)</option>
+          <option value="teacher" ${u?.role==='teacher'?'selected':''}>ครูผู้สอน (Teacher)</option>
+        </select>
+      </div>
+      <div id="u-pos-wrap" style="display:${u?.role==='teacher'?'block':'none'}">
+        <label class="text-xs font-semibold text-slate-600">ตำแหน่ง / วิทยฐานะ</label>
+        <input id="u-pos" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${u ? esc(u.position||'') : ''}">
+      </div>
+    </div>`,
+    showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: () => {
+      const username = $('#u-u').value.trim(), password = $('#u-p').value, name = $('#u-n').value.trim();
+      const role = $('#u-r').value, position = $('#u-pos-wrap').style.display!=='none' ? $('#u-pos').value.trim() : '';
+      if(!username || !password || !name){ Swal.showValidationMessage('กรุณากรอกข้อมูลให้ครบถ้วน'); return false; }
+      const dup = db.users.find(x => x.username===username && x.id!==id);
+      if(dup){ Swal.showValidationMessage('ชื่อผู้ใช้นี้มีในระบบแล้ว'); return false; }
+      return {username, password, name, role, position};
+    }
+  }).then(r => {
+    if(!r.isConfirmed) return;
+    if(u) Object.assign(u, r.value);
+    else db.users.push({id:uid(), ...r.value});
+    saveDB(); toast('success', 'บันทึกสำเร็จ'); render();
+  });
+}
+
+function delUser(id){
+  confirmDel().then(r => {
+    if(r.isConfirmed){ db.users = db.users.filter(x => x.id !== id); saveDB(); toast('success', 'ลบผู้ใช้แล้ว'); render(); }
+  });
+}
+
+// ---- Manage Terms ----
+function adminTerms(){
+  return `<div class="card p-5">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h3 class="font-bold text-slate-800 text-base">ภาคเรียน / ปีการศึกษา</h3>
+      <button onclick="openTermModal()" class="btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold shadow">+ เพิ่มภาคเรียน</button>
+    </div>
+    <div class="overflow-auto">
+      <table class="w-full">
+        <thead><tr><th>ภาคเรียน</th><th>ปีการศึกษา</th><th>สถานะ</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          ${db.terms.map(t => `<tr>
+            <td class="font-medium">${t.semester}</td>
+            <td class="font-medium">${t.year}</td>
+            <td>${t.current ? '<span class="badge q-3 font-semibold">ภาคเรียนปัจจุบัน</span>' : `<button onclick="setCurrentTerm('${t.id}')" class="text-xs px-2.5 py-1 rounded bg-slate-100 hover:bg-slate-200">ตั้งเป็นปัจจุบัน</button>`}</td>
+            <td><button onclick="delTerm('${t.id}')" class="text-xs px-2.5 py-1 rounded bg-red-50 text-red-700">ลบ</button></td>
+          </tr>`).join('') || '<tr><td colspan="4" class="text-center text-slate-400 py-6">ไม่มีข้อมูล</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+function setCurrentTerm(id){ db.terms.forEach(t => t.current = (t.id===id)); saveDB(); toast('success', 'ตั้งเป็นปัจจุบันแล้ว'); render(); }
+function delTerm(id){ confirmDel().then(r => { if(r.isConfirmed){ db.terms = db.terms.filter(x => x.id !== id); saveDB(); toast('success', 'ลบแล้ว'); render(); }}); }
+function openTermModal(){
+  Swal.fire({
+    title: 'เพิ่มภาคเรียน/ปีการศึกษา',
+    html: `<div class="text-left space-y-3">
+      <div><label class="text-xs font-semibold">ภาคเรียนที่</label>
+        <select id="t-s" class="w-full mt-1 px-3 py-2 border rounded-lg"><option value="1">1</option><option value="2">2</option></select></div>
+      <div><label class="text-xs font-semibold">ปีการศึกษา (พ.ศ.)</label>
+        <input id="t-y" type="number" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${new Date().getFullYear()+543}"></div>
+    </div>`,
+    showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: () => ({semester: +$('#t-s').value, year: +$('#t-y').value, current: false})
+  }).then(r => {
+    if(r.isConfirmed){ db.terms.push({id:uid(), ...r.value}); saveDB(); toast('success', 'เพิ่มเรียบร้อย'); render(); }
+  });
+}
+
+// ---- Manage Subjects ----
+function adminSubjects(){
+  return `<div class="space-y-4">
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 class="font-bold text-slate-800 text-base">กลุ่มสาระการเรียนรู้</h3>
+        <button onclick="addGroup()" class="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">+ เพิ่มกลุ่มสาระ</button>
+      </div>
+      <div class="flex flex-wrap gap-2">
+        ${db.subjectGroups.map(g => `<div class="flex items-center gap-2 bg-slate-100 rounded-lg px-3 py-1.5 text-xs font-medium border">
+          <span>${esc(g.name)}</span>
+          <button onclick="delGroup('${g.id}')" class="text-red-500 hover:text-red-700">✕</button>
+        </div>`).join('') || '<span class="text-slate-400 text-xs">ไม่มีกลุ่มสาระ</span>'}
+      </div>
+    </div>
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h3 class="font-bold text-slate-800 text-base">รายวิชาทั้งหมด</h3>
+        <button onclick="openSubjectModal()" class="btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold shadow">+ เพิ่มรายวิชา</button>
+      </div>
+      <input id="sub-search" placeholder="พิมพ์ค้นหารายวิชา..." oninput="filterSubjects()" class="w-full mb-4 px-3 py-2 border rounded-lg text-sm bg-slate-50">
+      <div id="subject-list" class="space-y-3">
+        ${db.subjectGroups.map(g => {
+          const ss = db.subjects.filter(s => s.groupId === g.id);
+          if(ss.length === 0) return '';
+          return `<div class="border rounded-xl p-3 bg-slate-50">
+            <p class="text-xs font-bold text-slate-700 mb-2">${esc(g.name)} (${ss.length} วิชา)</p>
+            <div class="flex flex-wrap gap-2">
+              ${ss.map(s => `<div class="bg-white border rounded-lg px-2.5 py-1.5 text-xs flex items-center gap-2 shadow-sm">
+                <span class="font-medium">${esc(s.name)}</span>
+                <button onclick="openSubjectModal('${s.id}')" class="text-amber-600 hover:text-amber-800 font-bold">✎</button>
+                <button onclick="delSubject('${s.id}')" class="text-red-500 hover:text-red-700 font-bold">✕</button>
+              </div>`).join('')}
+            </div>
+          </div>`;
+        }).join('') || '<p class="text-slate-400 text-xs">ไม่มีรายวิชา</p>'}
+      </div>
+    </div>
+  </div>`;
+}
+function filterSubjects(){
+  const q = $('#sub-search').value.toLowerCase();
+  $$('#subject-list > div').forEach(el => {
+    let vis = false;
+    $$('.bg-white', el).forEach(b => {
+      const m = b.textContent.toLowerCase().includes(q);
+      b.style.display = m ? '' : 'none'; if(m) vis = true;
+    });
+    el.style.display = vis ? '' : 'none';
+  });
+}
+function addGroup(){
+  Swal.fire({title:'เพิ่มกลุ่มสาระ', input:'text', showCancelButton:true, confirmButtonText:'บันทึก', cancelButtonText:'ยกเลิก', confirmButtonColor:db.settings.primary})
+    .then(r => { if(r.isConfirmed && r.value.trim()){ db.subjectGroups.push({id:uid(), name:r.value.trim()}); saveDB(); toast('success','เพิ่มกลุ่มสาระแล้ว'); render(); }});
+}
+function delGroup(id){
+  confirmDel().then(r => { if(r.isConfirmed){ db.subjectGroups=db.subjectGroups.filter(g=>g.id!==id); db.subjects=db.subjects.filter(s=>s.groupId!==id); saveDB(); render(); }});
+}
+function openSubjectModal(id){
+  const s = id ? db.subjects.find(x => x.id === id) : null;
+  Swal.fire({
+    title: s ? 'แก้ไขรายวิชา' : 'เพิ่มรายวิชาใหม่',
+    html: `<div class="text-left space-y-3">
+      <div><label class="text-xs font-semibold">ชื่อรายวิชา</label><input id="sub-n" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${s ? esc(s.name) : ''}"></div>
+      <div><label class="text-xs font-semibold">กลุ่มสาระการเรียนรู้</label>
+        <select id="sub-g" class="w-full mt-1 px-3 py-2 border rounded-lg">
+          ${db.subjectGroups.map(g => `<option value="${g.id}" ${s?.groupId===g.id?'selected':''}>${esc(g.name)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`,
+    showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: () => {
+      const name = $('#sub-n').value.trim();
+      if(!name){ Swal.showValidationMessage('กรุณากรอกชื่อวิชา'); return false; }
+      return {name, groupId:$('#sub-g').value};
+    }
+  }).then(r => {
+    if(!r.isConfirmed) return;
+    if(s) Object.assign(s, r.value); else db.subjects.push({id:uid(), ...r.value});
+    saveDB(); toast('success', 'บันทึกแล้ว'); render();
+  });
+}
+function delSubject(id){ confirmDel().then(r => { if(r.isConfirmed){ db.subjects = db.subjects.filter(s => s.id !== id); saveDB(); render(); }}); }
+
+// ---- Manage Classes & Students ----
+function adminClasses(){
+  return `<div class="space-y-4">
+    <div class="card p-5">
+      <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <h3 class="font-bold text-slate-800 text-base">ชั้นเรียน (ห้องเรียน)</h3>
+        <button onclick="openClassModal()" class="btn-primary px-3.5 py-2 rounded-xl text-xs font-semibold shadow">+ เพิ่มชั้นเรียน</button>
+      </div>
+      <div class="overflow-auto">
+        <table class="w-full">
+          <thead><tr><th>ชั้นเรียน</th><th>ระดับชั้น</th><th>จำนวนนักเรียน</th><th>จัดการ</th></tr></thead>
+          <tbody>
+            ${db.classes.map(c => {
+              const lv = db.levels.find(l => l.id === c.levelId);
+              const n = db.students.filter(s => s.classId === c.id).length;
+              return `<tr>
+                <td class="font-bold text-slate-700">${esc(c.name)}</td>
+                <td>${esc(lv?.name || '-')}</td>
+                <td><span class="badge bg-slate-100 text-slate-700">${n} คน</span></td>
+                <td class="whitespace-nowrap">
+                  <button onclick="viewClassStudents('${c.id}')" class="text-xs px-2.5 py-1 rounded bg-emerald-50 text-emerald-700 font-semibold mr-1.5">รายชื่อนักเรียน</button>
+                  <button onclick="delClass('${c.id}')" class="text-xs px-2.5 py-1 rounded bg-red-50 text-red-700 font-semibold">ลบ</button>
+                </td>
+              </tr>`;
+            }).join('') || '<tr><td colspan="4" class="text-center text-slate-400 py-6">ไม่มีข้อมูลชั้นเรียน</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div id="class-students-wrap"></div>
+  </div>`;
+}
+function openClassModal(){
+  Swal.fire({
+    title: 'เพิ่มชั้นเรียน',
+    html: `<div class="text-left space-y-3">
+      <div><label class="text-xs font-semibold">ชื่อชั้นเรียน (เช่น ม.1/1, ม.2/1)</label><input id="cls-n" class="w-full mt-1 px-3 py-2 border rounded-lg" placeholder="ม.1/1"></div>
+      <div><label class="text-xs font-semibold">ระดับชั้น</label>
+        <select id="cls-l" class="w-full mt-1 px-3 py-2 border rounded-lg">
+          ${db.levels.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join('')}
+        </select>
+      </div>
+    </div>`,
+    showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: () => {
+      const name = $('#cls-n').value.trim();
+      if(!name){ Swal.showValidationMessage('กรอกชื่อชั้นเรียน'); return false; }
+      return {name, levelId:$('#cls-l').value};
+    }
+  }).then(r => { if(r.isConfirmed){ db.classes.push({id:uid(), ...r.value}); saveDB(); toast('success','เพิ่มเรียบร้อย'); render(); } });
+}
+function delClass(id){ confirmDel().then(r => { if(r.isConfirmed){ db.classes=db.classes.filter(c=>c.id!==id); db.students=db.students.filter(s=>s.classId!==id); saveDB(); render(); }}); }
+
+function viewClassStudents(classId){
+  const c = db.classes.find(x => x.id === classId);
+  const sts = db.students.filter(s => s.classId === classId).sort((a,b) => a.number - b.number);
+  $('#class-students-wrap').innerHTML = `<div class="card p-5 fade-in border-t-4 border-t-emerald-600">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h3 class="font-bold text-slate-800 text-base">รายชื่อนักเรียนห้อง ${esc(c.name)} (${sts.length} คน)</h3>
+      <div class="flex gap-2">
+        <button onclick="openStudentModal('${classId}')" class="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">+ เพิ่มนักเรียน</button>
+        <button onclick="openExcelImport('${classId}')" class="btn-outline px-3 py-1.5 rounded-lg text-xs font-semibold">📤 นำเข้า Excel</button>
+      </div>
+    </div>
+    <div class="overflow-auto">
+      <table class="w-full">
+        <thead><tr><th>เลขที่</th><th>ชื่อ-นามสกุล</th><th>จัดการ</th></tr></thead>
+        <tbody>
+          ${sts.map(s => `<tr>
+            <td class="font-semibold">${s.number}</td>
+            <td class="text-left font-medium">${esc(s.name)}</td>
+            <td class="whitespace-nowrap">
+              <button onclick="openStudentModal('${classId}','${s.id}')" class="text-xs px-2.5 py-1 rounded bg-amber-50 text-amber-700 font-semibold mr-1.5">แก้ไข</button>
+              <button onclick="delStudent('${s.id}')" class="text-xs px-2.5 py-1 rounded bg-red-50 text-red-700 font-semibold">ลบ</button>
+            </td>
+          </tr>`).join('') || '<tr><td colspan="3" class="text-center text-slate-400 py-6">ยังไม่มีนักเรียนในห้องนี้</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function openStudentModal(classId, id){
+  const s = id ? db.students.find(x => x.id === id) : null;
+  const sts = db.students.filter(x => x.classId === classId);
+  const nextNum = s ? s.number : (sts.length ? Math.max(...sts.map(x=>x.number))+1 : 1);
+  Swal.fire({
+    title: s ? 'แก้ไขข้อมูลนักเรียน' : 'เพิ่มนักเรียนใหม่',
+    html: `<div class="text-left space-y-3">
+      <div><label class="text-xs font-semibold">เลขที่</label><input id="st-num" type="number" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${nextNum}"></div>
+      <div><label class="text-xs font-semibold">ชื่อ-นามสกุล</label><input id="st-name" class="w-full mt-1 px-3 py-2 border rounded-lg" value="${s ? esc(s.name) : ''}"></div>
+    </div>`,
+    showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: () => {
+      const number = +$('#st-num').value, name = $('#st-name').value.trim();
+      if(!name){ Swal.showValidationMessage('กรอกชื่อ-นามสกุล'); return false; }
+      return {number, name, classId};
+    }
+  }).then(r => {
+    if(!r.isConfirmed) return;
+    if(s) Object.assign(s, r.value); else db.students.push({id:uid(), ...r.value});
+    saveDB(); toast('success', 'บันทึกสำเร็จ'); render(); setTimeout(() => viewClassStudents(classId), 100);
+  });
+}
+function delStudent(id){ confirmDel().then(r => { if(r.isConfirmed){ db.students = db.students.filter(x => x.id !== id); saveDB(); render(); toast('success','ลบแล้ว'); }}); }
+
+function openExcelImport(classId){
+  Swal.fire({
+    title: 'นำเข้ารายชื่อจาก Excel',
+    html: `<div class="text-left text-xs space-y-2 text-slate-600">
+      <p>ไฟล์ Excel (.xlsx) คอลัมน์ที่ 1: เลขที่, คอลัมน์ที่ 2: ชื่อ-นามสกุล</p>
+      <input id="xl-file" type="file" accept=".xlsx,.xls" class="w-full px-3 py-2 border rounded-lg bg-slate-50">
+    </div>`,
+    showCancelButton: true, confirmButtonText: 'เริ่มนำเข้า', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: () => {
+      const f = $('#xl-file').files[0];
+      if(!f){ Swal.showValidationMessage('กรุณาเลือกไฟล์'); return false; }
+      return new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          try {
+            const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+            const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1});
+            const rows = [];
+            data.forEach((r, i) => {
+              if(i === 0) return; // skip header
+              const num = r[0], name = r[1];
+              if(name) rows.push({number: +num || i, name: String(name).trim()});
+            });
+            res(rows);
+          } catch(err){ rej(err); }
+        };
+        reader.readAsArrayBuffer(f);
+      });
+    }
+  }).then(r => {
+    if(r.isConfirmed){
+      r.value.forEach(row => db.students.push({id:uid(), classId, number:row.number, name:row.name}));
+      saveDB(); toast('success', `นำเข้าสำเร็จ ${r.value.length} คน`); render(); setTimeout(() => viewClassStudents(classId), 100);
+    }
+  });
+}
+
+// ---- Manage Topics ----
+function adminTopics(){
+  return `<div class="space-y-4">
+    <div class="card p-5">
+      <div class="flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-bold text-slate-700">เลือกโครงสร้างหัวข้อสมรรถนะ:</span>
+        <button onclick="editTopicType('junior')" class="btn-primary px-4 py-2 rounded-xl text-xs font-semibold">มัธยมศึกษาตอนต้น (ม.ต้น)</button>
+        <button onclick="editTopicType('senior')" class="btn-primary px-4 py-2 rounded-xl text-xs font-semibold">มัธยมศึกษาตอนปลาย (ม.ปลาย)</button>
+      </div>
+    </div>
+    <div id="topic-editor"></div>
+  </div>`;
+}
+
+function editTopicType(type){
+  state.topicType = type;
+  const tree = db.topics[type];
+  const el = $('#topic-editor');
+  if(!el) return;
+  el.innerHTML = `<div class="card p-5">
+    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+      <h3 class="font-bold text-slate-800 text-base">หัวข้อสมรรถนะสำคัญ ${type==='junior'?'ระดับมัธยมศึกษาตอนต้น':'ระดับมัธยมศึกษาตอนปลาย'}</h3>
+      <button onclick="addTopicNode(null,'${type}')" class="btn-primary px-3 py-1.5 rounded-lg text-xs font-semibold">+ เพิ่มสมรรถนะหลัก</button>
+    </div>
+    <div class="space-y-2 border-l-2 border-emerald-500 pl-2">
+      ${tree.map(n => renderTopicNode(n, type, 0)).join('') || '<p class="text-slate-400 text-xs">ไม่มีหัวข้อ</p>'}
+    </div>
+  </div>`;
+}
+
+function renderTopicNode(n, type, level){
+  const indent = level * 16;
+  const canAdd = level < 4;
+  return `<div class="border-l-2 border-slate-200 pl-2 py-1" style="margin-left:${indent}px">
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs ${level===0 ? 'font-bold text-emerald-800 text-sm' : 'font-medium text-slate-700'}">${esc(n.name)}</span>
+      ${canAdd ? `<button onclick="addTopicNode('${n.id}','${type}')" class="text-xs text-primary font-bold hover:underline">+ ย่อย</button>` : ''}
+      <button onclick="editTopicNode('${n.id}','${type}')" class="text-xs text-amber-600 font-bold hover:underline">✎</button>
+      <button onclick="delTopicNode('${n.id}','${type}')" class="text-xs text-red-600 font-bold hover:underline">✕</button>
+    </div>
+    ${n.children?.map(c => renderTopicNode(c, type, level+1)).join('') || ''}
+  </div>`;
+}
+
+function addTopicNode(parentId, type){
+  Swal.fire({
+    title: 'เพิ่มหัวข้อสมรรถนะ',
+    input: 'textarea', inputAttributes: {rows:3},
+    showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: v => { if(!v.trim()){ Swal.showValidationMessage('กรุณากรอกชื่อหัวข้อ'); return false; } return v.trim(); }
+  }).then(r => {
+    if(!r.isConfirmed) return;
+    const newNode = {id:uid(), name:r.value, children:[]};
+    if(parentId == null) db.topics[type].push(newNode);
+    else { const p = findNode(db.topics[type], parentId); if(p){ p.children = p.children || []; p.children.push(newNode); } }
+    saveDB(); toast('success','เพิ่มหัวข้อแล้ว'); editTopicType(type);
+  });
+}
+function editTopicNode(id, type){
+  const n = findNode(db.topics[type], id);
+  Swal.fire({
+    title: 'แก้ไขหัวข้อ', input: 'textarea', inputValue: n.name, inputAttributes: {rows:3},
+    showCancelButton: true, confirmButtonText: 'บันทึก', cancelButtonText: 'ยกเลิก', confirmButtonColor: db.settings.primary,
+    preConfirm: v => { if(!v.trim()){ Swal.showValidationMessage('กรอกชื่อหัวข้อ'); return false; } return v.trim(); }
+  }).then(r => { if(r.isConfirmed){ n.name = r.value; saveDB(); toast('success','แก้ไขแล้ว'); editTopicType(type); } });
+}
+function delTopicNode(id, type){
+  confirmDel().then(r => {
+    if(!r.isConfirmed) return;
+    const rm = (nodes) => {
+      for(let i=0; i<nodes.length; i++){
+        if(nodes[i].id === id){ nodes.splice(i,1); return true; }
+        if(nodes[i].children && rm(nodes[i].children)) return true;
+      }
+      return false;
+    };
+    rm(db.topics[type]); saveDB(); toast('success','ลบเรียบร้อย'); editTopicType(type);
+  });
+}
+
+// ---- Search Results ----
+function adminSearch(){
+  return `<div class="card p-5">
+    <h3 class="font-bold text-slate-800 text-base mb-3">ค้นหาผลการประเมินสมรรถนะ</h3>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-2 mb-3">
+      <select id="s-term" class="px-3 py-2 border rounded-lg text-sm bg-white">
+        ${db.terms.map(t=>`<option value="${t.id}" ${t.current?'selected':''}>ภ.${t.semester}/${t.year}</option>`).join('')}
+      </select>
+      <select id="s-level" class="px-3 py-2 border rounded-lg text-sm bg-white">
+        <option value="">ทุกระดับชั้น</option>
+        ${db.levels.map(l=>`<option value="${l.id}">${esc(l.name)}</option>`).join('')}
+      </select>
+      <input id="s-name" placeholder="พิมพ์ชื่อนักเรียน..." class="px-3 py-2 border rounded-lg text-sm bg-white">
+      <select id="s-limit" class="px-3 py-2 border rounded-lg text-sm bg-white">
+        <option value="10">แสดง 10 คน</option><option value="25">แสดง 25 คน</option>
+        <option value="50">แสดง 50 คน</option><option value="100">แสดง 100 คน</option><option value="0">แสดงทั้งหมด</option>
+      </select>
+    </div>
+    <button onclick="runSearch()" class="btn-primary px-5 py-2.5 rounded-xl text-xs font-semibold shadow">🔍 ค้นหา</button>
+    <div id="search-results" class="mt-4"></div>
+  </div>`;
+}
+
+function runSearch(){
+  const termId = $('#s-term').value, levelId = $('#s-level').value, q = $('#s-name').value.toLowerCase(), limit = +$('#s-limit').value;
+  $('#search-results').innerHTML = skeletonList(5);
+  setTimeout(() => {
+    let sts = db.students;
+    if(levelId){ const clsIds = db.classes.filter(c => c.levelId === levelId).map(c => c.id); sts = sts.filter(s => clsIds.includes(s.classId)); }
+    if(q) sts = sts.filter(s => s.name.toLowerCase().includes(q));
+    const rows = [];
+    sts.forEach(s => {
+      const c = db.classes.find(x => x.id === s.classId);
+      const jv = studentOverall(s.id, termId, 'junior');
+      const sv = studentOverall(s.id, termId, 'senior');
+      rows.push({s, c, jv, sv});
+    });
+    const shown = limit > 0 ? rows.slice(0, limit) : rows;
+    $('#search-results').innerHTML = `<div class="text-xs text-slate-500 mb-2 font-medium">พบทั้งหมด ${rows.length} คน ${limit>0 && rows.length>limit ? '(แสดง ' + limit + ' คนแรก)' : ''}</div>
+      <div class="overflow-auto scroll-thin">
+      <table class="w-full">
+        <thead><tr><th>เลขที่</th><th>ชื่อ-นามสกุล</th><th>ชั้นเรียน</th><th>สมรรถนะ ม.ต้น</th><th>สมรรถนะ ม.ปลาย</th></tr></thead>
+        <tbody>
+          ${shown.map(r => `<tr>
+            <td class="font-semibold">${r.s.number}</td>
+            <td class="font-medium text-slate-800 text-left">${esc(r.s.name)}</td>
+            <td><span class="badge bg-slate-100">${esc(r.c?.name||'-')}</span></td>
+            <td>${r.jv!=null ? qBadge(qf(r.jv), r.jv) : '<span class="text-slate-400 text-xs">-</span>'}</td>
+            <td>${r.sv!=null ? qBadge(qf(sv), r.sv) : '<span class="text-slate-400 text-xs">-</span>'}</td>
+          </tr>`).join('') || '<tr><td colspan="5" class="text-center text-slate-400 py-6">ไม่พบข้อมูล</td></tr>'}
+        </tbody>
+      </table></div>`;
+  }, 100);
+}
+
+// ---- Settings & Google Sheets Sync ----
+function adminSettings(){
+  return `<div class="space-y-4">
+    <!-- Google Sheets & Drive Settings -->
+    <div class="card p-5 border-l-4 border-l-emerald-500">
+      <h3 class="font-bold text-slate-800 text-base mb-2">⚡ การเชื่อมโยง Google Sheets และ Google Drive</h3>
+      <p class="text-xs text-slate-600 mb-4">
+        เมื่อระบุ URL เว็บแอปของ Google Apps Script ระบบจะบันทึกข้อมูลคะแนน การประเมิน และแยกเป็น Sheet ประจำห้องเรียนให้อัตโนมัติ พร้อมอัปโหลดรูปภาพเข้า Google Drive โฟลเดอร์ ID: <code class="bg-slate-100 px-1 py-0.5 rounded text-emerald-800 font-bold">${DRIVE_FOLDER_ID}</code>
+      </p>
+
+      <div class="space-y-3">
+        <div>
+          <label class="text-xs font-semibold text-slate-700">Google Apps Script Web App URL:</label>
+          <input id="gas-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(db.settings.gasUrl||'')}" class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white font-mono">
+        </div>
+        <div class="flex flex-wrap gap-2 pt-2">
+          <button onclick="saveGasSettings()" class="btn-primary px-4 py-2 rounded-xl text-xs font-semibold shadow">💾 บันทึกการตั้งค่า URL</button>
+          <button onclick="testInitSheets()" class="btn-outline px-4 py-2 rounded-xl text-xs font-semibold">🔄 สร้างชีทและเชื่อมต่ออัตโนมัติ (Init Sheets)</button>
+          <button onclick="syncAllToSheets()" class="btn-outline px-4 py-2 rounded-xl text-xs font-semibold">☁️ ซิงค์ข้อมูลระบบขึ้น Google Sheets</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- โรงเรียนและโลโก้ -->
+    <div class="card p-5">
+      <h3 class="font-bold text-slate-800 text-base mb-3">รูปภาพและโลโก้โรงเรียน</h3>
+      <div class="flex items-center gap-4 flex-wrap">
+        ${db.settings.logo ? `<img src="${db.settings.logo}" class="w-24 h-24 object-contain border rounded-xl p-1 bg-white shadow-sm">` : '<div class="w-24 h-24 border rounded-xl flex items-center justify-center text-slate-400 text-xs bg-slate-50">ไม่มีโลโก้</div>'}
+        <div class="space-y-2">
+          <label class="btn-primary px-4 py-2 rounded-xl text-xs font-semibold cursor-pointer shadow inline-block">
+            📷 อัปโหลดรูปภาพ / โลโก้
+            <input type="file" accept="image/*" class="hidden" onchange="uploadLogoFile(event)">
+          </label>
+          ${db.settings.logo ? `<button onclick="db.settings.logo=null;saveDB();render();" class="text-xs text-rose-500 hover:text-rose-700 block font-semibold">ลบโลโก้</button>` : ''}
+          <p class="text-[11px] text-slate-400">รูปภาพจะถูกจัดเก็บลงใน Google Drive โฟลเดอร์ ${DRIVE_FOLDER_ID}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ธีมสีระบบ -->
+    <div class="card p-5">
+      <h3 class="font-bold text-slate-800 text-base mb-3">ชุดสีประจำระบบ</h3>
+      <div class="flex gap-4 flex-wrap">
+        <div>
+          <label class="text-xs font-semibold block mb-1">สีหลัก (Primary)</label>
+          <input type="color" value="${db.settings.primary}" onchange="db.settings.primary=this.value;saveDB();applyTheme();render();" class="w-20 h-10 border rounded-lg cursor-pointer">
+        </div>
+        <div>
+          <label class="text-xs font-semibold block mb-1">สีรอง (Secondary)</label>
+          <input type="color" value="${db.settings.secondary}" onchange="db.settings.secondary=this.value;saveDB();applyTheme();render();" class="w-20 h-10 border rounded-lg cursor-pointer">
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveGasSettings(){
+  const url = $('#gas-url').value.trim();
+  db.settings.gasUrl = url;
+  saveDB();
+  toast('success', 'บันทึก URL สำเร็จ');
+}
+
+async function testInitSheets(){
+  saveGasSettings();
+  if(!db.settings.gasUrl){
+    Swal.fire('แจ้งเตือน', 'กรุณาระบุ Google Apps Script Web App URL ก่อน', 'warning');
+    return;
+  }
+  Swal.fire({title:'กำลังเชื่อมต่อ...', text:'กำลังตรวจสอบและสร้าง Sheet อัตโนมัติ', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
+  try {
+    const res = await apiCall('init');
+    Swal.close();
+    if(res && res.status === 'success'){
+      Swal.fire('สำเร็จ', `สร้างและตั้งค่า Google Sheets เรียบร้อยแล้ว!<br><small class="text-slate-500">ชีทที่สร้าง: ${(res.details?.created||[]).join(', ')||'ชีททั้งหมดพร้อมใช้งาน'}</small>`, 'success');
+    } else {
+      Swal.fire('ข้อผิดพลาด', res?.message || 'ไม่สามารถติดต่อ Apps Script ได้', 'error');
+    }
+  } catch(e) {
+    Swal.close();
+    Swal.fire('ข้อผิดพลาดการเชื่อมต่อ', e.toString(), 'error');
+  }
+}
+
+async function syncAllToSheets(){
+  saveGasSettings();
+  if(!db.settings.gasUrl){
+    Swal.fire('แจ้งเตือน', 'กรุณาระบุ Web App URL ก่อน', 'warning');
+    return;
+  }
+  Swal.fire({title:'กำลังซิงค์ข้อมูล...', text:'กำลังส่งข้อมูลระบบขึ้น Google Sheets', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
+  try {
+    const res = await apiCall('syncAllData', {data: db});
+    Swal.close();
+    if(res && res.status === 'success'){
+      Swal.fire('ซิงค์สำเร็จ', 'ข้อมูลระบบถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว', 'success');
+    } else {
+      Swal.fire('ข้อผิดพลาด', res?.message || 'ไม่สามารถซิงค์ได้', 'error');
+    }
+  } catch(e) {
+    Swal.close();
+    Swal.fire('ข้อผิดพลาด', e.toString(), 'error');
+  }
+}
+
+async function uploadLogoFile(e){
+  const f = e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    const base64Data = ev.target.result;
+    db.settings.logo = base64Data;
+    saveDB();
+    render();
+
+    // ถ้ามี GAS URL ให้อัปโหลดเข้า Google Drive โฟลเดอร์ DRIVE_FOLDER_ID
+    if(db.settings.gasUrl){
+      toast('info', 'กำลังส่งรูปภาพไปยัง Google Drive...');
+      try {
+        const res = await apiCall('uploadFile', {
+          base64Data: base64Data,
+          fileName: 'logo_' + f.name,
+          mimeType: f.type
+        });
+        if(res && res.fileUrl){
+          db.settings.logo = res.fileUrl;
+          saveDB();
+          toast('success', 'บันทึกลง Google Drive เรียบร้อย');
+          render();
+        }
+      } catch(err){
+        console.warn('อัปโหลดเข้า Drive ไม่สำเร็จ บันทึกในระบบเรียบร้อย', err);
+      }
+    } else {
+      toast('success', 'อัปโหลดภาพสำเร็จ');
+    }
+  };
+  reader.readAsDataURL(f);
+}
+
+function applyTheme(){
+  document.documentElement.style.setProperty('--primary', db.settings.primary);
+  document.documentElement.style.setProperty('--secondary', db.settings.secondary);
+}
+
+// =================== TEACHER SYSTEM ===================
+function viewTeacher(){
+  if(!state.user || state.user.role !== 'teacher'){
+    return `<div class="p-10 text-center font-bold text-slate-600">กรุณาเข้าสู่ระบบด้วยบัญชีครูผู้สอน</div>`;
+  }
+  const tabs = [
+    ['dashboard', 'แดชบอร์ดสรุป', '📊'],
+    ['assess', 'ทำการประเมินสมรรถนะ', '✏️'],
+    ['profile', 'โปรไฟล์ของฉัน', '👤']
+  ];
+  return `<div class="min-h-screen">
+    ${dashHeader('ระบบบันทึกการประเมิน (สำหรับครูผู้สอน)', 'teacher')}
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex flex-wrap gap-1.5 mb-4">
+        ${tabs.map(([k, l, ic]) => `
+          <button onclick="state.teacherTab='${k}';render()" class="px-4 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition shadow-sm ${state.teacherTab===k ? 'tab-active shadow-emerald-200' : 'bg-white text-slate-600 hover:bg-slate-100'}">
+            ${ic} ${l}
+          </button>
+        `).join('')}
+      </div>
+      <div id="teacher-content">${teacherContent()}</div>
+    </div>
+  </div>`;
+}
+
+function teacherContent(){
+  switch(state.teacherTab){
+    case 'dashboard': return teacherDashboard();
+    case 'assess': return teacherAssess();
+    case 'profile': return teacherProfile();
+    default: return '';
+  }
+}
+
+function teacherDashboard(){
+  return `<div class="space-y-4">
+    <div class="card p-4 flex flex-wrap gap-3 items-center justify-between">
+      <div class="flex items-center gap-3">
+        <label class="text-sm font-semibold text-slate-700">ภาคเรียน/ปีการศึกษา:</label>
+        <select id="t-term" onchange="renderTeacherDash()" class="px-3 py-2 border rounded-lg text-sm bg-white font-medium">
+          ${db.terms.map(t=>`<option value="${t.id}" ${t.current?'selected':''}>ภาคเรียนที่ ${t.semester}/${t.year}${t.current?' (ปัจจุบัน)':''}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    <div id="teacher-dash-content">${skeletonList(6)}</div>
+  </div>`;
+}
+
+let teacherLevelChart = null;
+let teacherClassChart = null;
+
+function renderTeacherDash(){
+  const termId = $('#t-term')?.value;
+  if(!termId) return;
+  setTimeout(() => {
+    const data = computeDashboard(termId);
+    const myAss = db.assessments.filter(a => a.teacherId === state.user.id && a.termId === termId);
+    const myClasses = new Set(myAss.map(a => a.classId)).size;
+    const el = $('#teacher-dash-content');
+    if(!el) return;
+
+    el.innerHTML = `
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        ${kpiCard('ภาพรวมทั้งโรงเรียน', data.school)}
+        ${kpiCard('ระดับ ม.ต้น', data.junior)}
+        ${kpiCard('ระดับ ม.ปลาย', data.senior)}
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="card p-4 text-center border-t-2 border-t-emerald-500"><p class="text-xs text-slate-500 font-semibold">ชั้นเรียนที่ฉันประเมินแล้ว</p><p class="text-2xl font-black text-slate-800 mt-1">${myClasses} <span class="text-xs font-normal text-slate-400">/ ${db.classes.length} ห้อง</span></p></div>
+        <div class="card p-4 text-center border-t-2 border-t-emerald-500"><p class="text-xs text-slate-500 font-semibold">จำนวนข้อที่ประเมินไปแล้ว</p><p class="text-2xl font-black text-slate-800 mt-1">${myAss.length} <span class="text-xs font-normal text-slate-400">รายการ</span></p></div>
+        <div class="card p-4 text-center border-t-2 border-t-emerald-500"><p class="text-xs text-slate-500 font-semibold">นักเรียนที่ประเมินแล้ว</p><p class="text-2xl font-black text-slate-800 mt-1">${new Set(myAss.map(a=>a.studentId)).size} <span class="text-xs font-normal text-slate-400">คน</span></p></div>
+      </div>
+
+      <div class="card p-5 mb-6">
+        <div class="text-center mb-3">
+          <h3 class="font-bold text-slate-800 text-base">กราฟสรุปภาพรวมระดับคุณภาพและค่าเฉลี่ยแยกตามระดับชั้น</h3>
+          <p class="text-xs text-slate-500">มัธยมศึกษาปีที่ 1 ถึง 6</p>
+        </div>
+        <div class="relative h-72"><canvas id="teacher-level-chart"></canvas></div>
+      </div>
+
+      <!-- กราฟสรุปรายชั้นเรียนสำหรับครู -->
+      <div class="card p-5">
+        <div class="text-center mb-3">
+          <h3 class="font-bold text-slate-800 text-base">กราฟสรุปค่าเฉลี่ยรายชั้นเรียน (ห้องเรียน)</h3>
+          <p class="text-xs text-slate-500">เลือกชั้นเรียนที่ต้องการเปรียบเทียบ เช่น ม.1/1, ม.2/1 (ถ้าไม่เลือกจะไม่แสดงข้อมูล)</p>
+        </div>
+        
+        <div class="bg-slate-50 p-3 rounded-xl border mb-4">
+          <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+            <span class="text-xs font-semibold text-slate-700">เลือกห้องเรียนที่ต้องการแสดง:</span>
+            <div class="flex gap-2">
+              <button onclick="selectAllDashClasses('teacher', true)" class="text-xs text-emerald-600 font-semibold hover:underline">เลือกทั้งหมด</button>
+              <span class="text-slate-300">|</span>
+              <button onclick="selectAllDashClasses('teacher', false)" class="text-xs text-rose-500 font-semibold hover:underline">ล้างการเลือก</button>
+            </div>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            ${db.classes.map(c => `
+              <label class="cursor-pointer text-xs font-medium px-2.5 py-1.5 rounded-lg border flex items-center gap-1.5 transition ${state.teacherSelectedClasses.includes(c.id)?'bg-emerald-100 border-emerald-400 text-emerald-800 font-bold':'bg-white text-slate-600 border-slate-200'}">
+                <input type="checkbox" value="${c.id}" ${state.teacherSelectedClasses.includes(c.id)?'checked':''} onchange="toggleDashClass('teacher', '${c.id}')" class="rounded text-emerald-600 focus:ring-emerald-500">
+                ${esc(c.name)}
+              </label>
+            `).join('')}
+          </div>
+        </div>
+
+        <div id="teacher-class-chart-wrap">
+          ${state.teacherSelectedClasses.length === 0 ? `
+            <div class="p-10 text-center text-slate-400 border border-dashed rounded-xl bg-slate-50">
+              <p class="font-medium text-sm">ยังไม่ได้เลือกชั้นเรียน</p>
+              <p class="text-xs mt-1">กรุณาคลิกเลือกห้องเรียนด้านบนเพื่อเปรียบเทียบกราฟค่าเฉลี่ย</p>
+            </div>
+          ` : `
+            <div class="relative h-80"><canvas id="teacher-class-chart"></canvas></div>
+          `}
+        </div>
+      </div>
+    `;
+
+    renderTeacherCharts(termId);
+  }, 100);
+}
+
+function renderTeacherCharts(termId){
+  const el = $('#teacher-level-chart');
+  if(!el) return;
+  const data = computeDashboard(termId);
+
+  if(teacherLevelChart) teacherLevelChart.destroy();
+  teacherLevelChart = new Chart(el, {
+    type: 'bar',
+    data: {
+      labels: data.byLevel.map(x => x.name),
+      datasets: [{label: 'ค่าเฉลี่ย', data: data.byLevel.map(x => x.avg), backgroundColor: db.settings.primary, borderRadius: 8}]
+    },
+    options: {responsive: true, maintainAspectRatio: false, scales: {y: {beginAtZero: true, max: 3}}}
+  });
+
+  const classCanvas = $('#teacher-class-chart');
+  if(classCanvas && state.teacherSelectedClasses.length > 0){
+    const classData = computeClassStats(termId, state.teacherSelectedClasses);
+    if(teacherClassChart) teacherClassChart.destroy();
+    teacherClassChart = new Chart(classCanvas, {
+      type: 'bar',
+      data: {
+        labels: classData.map(c => c.name),
+        datasets: [{
+          label: 'ค่าเฉลี่ยสมรรถนะห้องเรียน',
+          data: classData.map(c => c.avg),
+          backgroundColor: '#10b981',
+          borderRadius: 8
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, max: 3, ticks: { stepSize: 0.5 } } }
+      }
+    });
+  }
+}
+
+// =================== TEACHER ASSESSMENT (WITH VALIDATION & SAVE BUTTON) ===================
+let assessState = {
+  termId: null,
+  subjectId: null,
+  type: 'junior',
+  classId: null,
+  topicIdx: 0,
+  stagedScores: {} // เก็บค่าที่ครูกรอกในหน้าจอไว้ก่อนกดปุ่มประเมินบันทึก
+};
+
+function teacherAssess(){
+  const curTerm = db.terms.find(t=>t.current) || db.terms[0];
+  assessState.termId = assessState.termId || curTerm?.id;
+  const tree = db.topics[assessState.type];
+
+  return `<div class="space-y-4">
+    <div class="card p-5">
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div>
+          <label class="text-xs font-semibold text-slate-600">ภาคเรียน/ปีการศึกษา</label>
+          <select id="as-term" class="w-full mt-1 px-3 py-2 border rounded-lg text-xs bg-white font-medium" onchange="assessUpdate()">
+            ${db.terms.map(t=>`<option value="${t.id}" ${t.id===assessState.termId?'selected':''}>ภ.${t.semester}/${t.year}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600">รายวิชา</label>
+          <select id="as-subj" class="w-full mt-1 px-3 py-2 border rounded-lg text-xs bg-white font-medium" onchange="assessUpdate()">
+            <option value="">- เลือกรวมวิชา -</option>
+            ${db.subjectGroups.map(g => {
+              const ss = db.subjects.filter(s => s.groupId === g.id);
+              if(!ss.length) return '';
+              return `<optgroup label="${esc(g.name)}">${ss.map(s => `<option value="${s.id}" ${s.id===assessState.subjectId?'selected':''}>${esc(s.name)}</option>`).join('')}</optgroup>`;
+            }).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600">ประเภทระดับชั้น</label>
+          <select id="as-type" class="w-full mt-1 px-3 py-2 border rounded-lg text-xs bg-white font-medium" onchange="assessTypeChange(this.value)">
+            <option value="junior" ${assessState.type==='junior'?'selected':''}>มัธยมศึกษาตอนต้น (ม.ต้น)</option>
+            <option value="senior" ${assessState.type==='senior'?'selected':''}>มัธยมศึกษาตอนปลาย (ม.ปลาย)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600">ชั้นเรียน (ห้องเรียน)</label>
+          <select id="as-class" class="w-full mt-1 px-3 py-2 border rounded-lg text-xs bg-white font-medium" onchange="assessUpdate()">
+            <option value="">- เลือกห้องเรียน -</option>
+            ${db.classes.filter(c => {
+              const lv = db.levels.find(l => l.id === c.levelId);
+              return lv?.type === assessState.type;
+            }).map(c => `<option value="${c.id}" ${c.id===assessState.classId?'selected':''}>${esc(c.name)}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-slate-600">สมรรถนะหลัก (5 ด้าน)</label>
+          <select id="as-topic" class="w-full mt-1 px-3 py-2 border rounded-lg text-xs bg-white font-medium" onchange="assessUpdate()">
+            ${tree.map((t, i) => `<option value="${i}" ${i===assessState.topicIdx?'selected':''}>${esc(t.name)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="assess-body">${skeletonList(8)}</div>
+  </div>`;
+}
+
+function assessTypeChange(val){
+  assessState.type = val;
+  assessState.classId = null; // รีเซ็ตห้องเนื่องจากเปลี่ยนระดับ
+  assessState.topicIdx = 0;
+  render();
+  setTimeout(renderAssessBody, 100);
+}
+
+function assessUpdate(){
+  assessState.termId = $('#as-term').value;
+  assessState.subjectId = $('#as-subj').value;
+  assessState.type = $('#as-type').value;
+  assessState.classId = $('#as-class').value;
+  assessState.topicIdx = +$('#as-topic').value;
+  render();
+  setTimeout(renderAssessBody, 100);
+}
+
+function renderAssessBody(){
+  const body = $('#assess-body');
+  if(!body) return;
+  const {termId, subjectId, type, classId, topicIdx} = assessState;
+
+  if(!termId || !subjectId || !classId){
+    body.innerHTML = `<div class="card p-10 text-center text-slate-400 bg-white">
+      <svg class="w-12 h-12 mx-auto mb-2 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      <p class="font-bold text-slate-600">กรุณาเลือกข้อมูลให้ครบถ้วน</p>
+      <p class="text-xs mt-1">เลือกภาคเรียน รายวิชา และชั้นเรียนด้านบน เพื่อเริ่มทำการประเมิน</p>
+    </div>`;
+    return;
+  }
+
+  const tree = db.topics[type];
+  const mainTopic = tree[topicIdx];
+  if(!mainTopic){
+    body.innerHTML = `<div class="card p-6 text-center text-slate-400">ไม่พบข้อมูลสมรรถนะ</div>`;
+    return;
+  }
+
+  const path = findPath(tree, mainTopic.id) || [mainTopic];
+  const pathStr = path.map(p => p.name).join(' › ');
+  const leaves = flattenLeaves([mainTopic]);
+  const sts = db.students.filter(s => s.classId === classId).sort((a,b) => a.number - b.number);
+
+  if(sts.length === 0){
+    body.innerHTML = `<div class="card p-10 text-center text-slate-400 bg-white">
+      <p class="font-bold text-slate-600">ไม่มีรายชื่อนักเรียนในชั้นเรียนนี้</p>
+      <p class="text-xs mt-1">กรุณาเพิ่มรายชื่อนักเรียนในเมนู "ชั้นเรียน/นักเรียน" ก่อนทำการประเมิน</p>
+    </div>`;
+    return;
+  }
+
+  // โหลดคะแนนเดิมจากฐานข้อมูลเข้าสู่ stagedScores ถ้ายังไม่มีใน State
+  assessState.stagedScores = {};
+  db.assessments.filter(a => a.teacherId===state.user.id && a.termId===termId && a.subjectId===subjectId && a.classId===classId && a.type===type)
+    .forEach(a => {
+      assessState.stagedScores[a.studentId + '|' + a.topicId] = a.score;
+    });
+
+  const scores = assessState.stagedScores;
+
+  // ตรวจสอบจำนวนข้อที่ประเมินแล้ว
+  let totalRequired = sts.length * leaves.length;
+  let totalAnswered = 0;
+  sts.forEach(s => {
+    leaves.forEach(l => {
+      if(scores[s.id + '|' + l.node.id] != null) totalAnswered++;
+    });
+  });
+
+  const unassessedCount = totalRequired - totalAnswered;
+
+  const splitName = (name) => {
+    const m = name.match(/^([\d.]+)\s*(.*)$/);
+    if(m) return {code:m[1], text:m[2]||name};
+    return {code:'', text:name};
+  };
+
+  const headerCells = leaves.map(l => {
+    const {code, text} = splitName(l.node.name);
+    return `<th class="th-topic" title="${esc(l.node.name)}">
+      <div class="code text-emerald-800">${esc(code)}</div>
+      <div class="text">${esc(text)}</div>
+    </th>`;
+  }).join('');
+
+  const rows = sts.map(s => {
+    const smap = new Map();
+    let stuMissing = 0;
+    leaves.forEach(l => {
+      const v = scores[s.id + '|' + l.node.id];
+      if(v != null) smap.set(l.node.id, v);
+      else stuMissing++;
+    });
+    const sAvg = computeNodeAvg(mainTopic, smap);
+
+    const cells = leaves.map(l => {
+      const v = scores[s.id + '|' + l.node.id];
+      const isUnset = v == null;
+      return `<td class="text-center p-1">
+        <select class="score-select ${isUnset ? 'score-unassessed' : ''}" data-v="${v ?? ''}" data-sid="${s.id}" data-tid="${l.node.id}" onchange="stageScoreChange('${s.id}','${l.node.id}',this.value)">
+          <option value="" ${v==null?'selected':''}>-</option>
+          <option value="0" ${v===0?'selected':''}>0</option>
+          <option value="1" ${v===1?'selected':''}>1</option>
+          <option value="2" ${v===2?'selected':''}>2</option>
+          <option value="3" ${v===3?'selected':''}>3</option>
+        </select>
+      </td>`;
+    }).join('');
+
+    return `<tr id="row-stu-${s.id}">
+      <td class="text-center"><input type="checkbox" class="stu-check" data-sid="${s.id}"></td>
+      <td class="text-center font-bold text-slate-700">${s.number}</td>
+      <td class="text-left font-medium whitespace-nowrap pl-2">${esc(s.name)}</td>
+      ${cells}
+      <td class="text-center font-bold text-slate-800">${sAvg != null ? sAvg.toFixed(2) : '-'}</td>
+      <td class="text-center">${sAvg != null ? qBadge(qf(sAvg)) : '<span class="text-xs text-rose-500 font-bold">ยังไม่ครบ</span>'}</td>
+      <td class="text-center text-xs">${stuMissing > 0 ? `<span class="badge q-0 font-bold">${stuMissing}</span>` : '<span class="text-emerald-600 font-bold">✓</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `
+    <!-- หัวข้อที่กำลังประเมิน -->
+    <div class="card p-4 mb-3 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-3">
+        <div>
+          <span class="text-[11px] font-bold text-emerald-700 uppercase tracking-wide">กำลังประเมินสมรรถนะ:</span>
+          <p class="text-sm md:text-base font-bold text-slate-800">${esc(pathStr)}</p>
+          <p class="text-xs text-slate-500 mt-0.5">จำนวนข้อย่อย: <b>${leaves.length}</b> ข้อ | นักเรียน: <b>${sts.length}</b> คน</p>
+        </div>
+        <div class="flex items-center gap-2">
+          ${unassessedCount > 0 ? `
+            <div class="bg-rose-100 text-rose-800 border border-rose-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 animate-pulse">
+              <span>⚠️ ยังไม่ประเมิน: <b>${unassessedCount}</b> ช่อง</span>
+            </div>
+          ` : `
+            <div class="bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <span>✅ ครบถ้วนทุกข้อแล้ว</span>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+
+    <!-- แถบกำหนดค่าคะแนนด่วน -->
+    <div class="card p-3 mb-3 flex flex-wrap gap-2 items-center justify-between bg-slate-50 border">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs font-bold text-slate-600">ตั้งค่าทุกคน:</span>
+        ${[3,2,1,0].map(v => `<button onclick="bulkStageAll(${v})" class="px-2.5 py-1 rounded text-xs font-bold score-select" data-v="${v}">${v} (${QN[v]})</button>`).join('')}
+        <span class="text-slate-300 mx-1">|</span>
+        <span class="text-xs font-bold text-slate-600">คนที่เลือก:</span>
+        ${[3,2,1,0].map(v => `<button onclick="bulkStageSelected(${v})" class="px-2.5 py-1 rounded text-xs font-bold score-select" data-v="${v}">${v}</button>`).join('')}
+      </div>
+
+      <!-- ปุ่มกดประเมินเพื่อเป็นการบันทึกข้อมูล -->
+      <div>
+        <button onclick="commitAndSaveAssessments()" class="btn-primary px-5 py-2 rounded-xl text-xs font-extrabold shadow-lg shadow-emerald-200 flex items-center gap-1.5 transform active:scale-95 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+          💾 กดประเมินเพื่อบันทึกข้อมูล
+        </button>
+      </div>
+    </div>
+
+    <!-- ตารางการประเมิน -->
+    <div class="card p-4 overflow-auto scroll-thin" style="max-height:70vh">
+      <table class="w-full" style="min-width:100%">
+        <thead><tr>
+          <th style="min-width:36px"><input type="checkbox" id="checkAllStu"></th>
+          <th style="min-width:48px">เลขที่</th>
+          <th style="min-width:160px">ชื่อ-นามสกุล</th>
+          ${headerCells}
+          <th style="min-width:64px">เฉลี่ย</th>
+          <th style="min-width:130px">ระดับคุณภาพ</th>
+          <th style="min-width:50px">ค้าง</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 card bg-emerald-50/50 border border-emerald-100">
+      <div class="text-xs text-slate-600">
+        💡 <b>คำแนะนำ:</b> ต้องประเมินให้ครบทุกข้อ (ช่องสีแดงคือข้อที่ยังไม่ได้ประเมิน) เมื่อเสร็จสิ้นให้คลิกปุ่ม <b>"กดประเมินเพื่อบันทึกข้อมูล"</b>
+      </div>
+      <button onclick="commitAndSaveAssessments()" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-emerald-200 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        บันทึกผลการประเมิน
+      </button>
+    </div>
+  `;
+
+  $('#checkAllStu').onchange = e => {
+    $$('.stu-check').forEach(c => c.checked = e.target.checked);
+  };
+}
+
+function stageScoreChange(sid, tid, val){
+  if(val === '') delete assessState.stagedScores[sid + '|' + tid];
+  else assessState.stagedScores[sid + '|' + tid] = +val;
+  renderAssessBody();
+}
+
+function bulkStageAll(val){
+  const {type, topicIdx, classId} = assessState;
+  const leaves = flattenLeaves([db.topics[type][topicIdx]]);
+  const sts = db.students.filter(s => s.classId === classId);
+  sts.forEach(s => {
+    leaves.forEach(l => {
+      assessState.stagedScores[s.id + '|' + l.node.id] = val;
+    });
+  });
+  toast('success', `ตั้งค่าคะแนน ${val} ให้ทุกคนแล้ว`);
+  renderAssessBody();
+}
+
+function bulkStageSelected(val){
+  const checked = $$('.stu-check:checked').map(c => c.dataset.sid);
+  if(checked.length === 0){ toast('warning', 'กรุณาเลือกนักเรียนก่อน'); return; }
+  const {type, topicIdx} = assessState;
+  const leaves = flattenLeaves([db.topics[type][topicIdx]]);
+  checked.forEach(sid => {
+    leaves.forEach(l => {
+      assessState.stagedScores[sid + '|' + l.node.id] = val;
+    });
+  });
+  toast('success', `ตั้งค่าคะแนน ${val} ให้คนที่เลือกเรียบร้อย`);
+  renderAssessBody();
+}
+
+/**
+ * ฟังก์ชันหลัก: ตรวจสอบความถูกต้องว่าประเมินครบทุกข้อหรือไม่
+ * หากไม่ครบ ให้แจ้งเตือนว่าข้อไหน/นักเรียนคนใดที่ยังไม่ได้ประเมิน
+ * หากครบ ให้บันทึกลงระบบ + Google Sheets
+ */
+async function commitAndSaveAssessments(){
+  const {termId, subjectId, type, classId, topicIdx} = assessState;
+  const tree = db.topics[type];
+  const mainTopic = tree[topicIdx];
+  const leaves = flattenLeaves([mainTopic]);
+  const sts = db.students.filter(s => s.classId === classId).sort((a,b) => a.number - b.number);
+  const scores = assessState.stagedScores;
+
+  // ตรวจสอบข้อที่ยังไม่ได้ประเมิน
+  const unassessedList = [];
+  sts.forEach(s => {
+    const missingTopics = [];
+    leaves.forEach(l => {
+      if(scores[s.id + '|' + l.node.id] == null){
+        missingTopics.push(l.node.name);
+      }
+    });
+    if(missingTopics.length > 0){
+      unassessedList.push({student: s, missingTopics});
+    }
+  });
+
+  // ถ้ายังมีข้อที่ไม่ได้ประเมิน ให้แจ้งเตือนและระบุข้อชัดเจน
+  if(unassessedList.length > 0){
+    const missingSummaryHtml = unassessedList.map(item => `
+      <div class="p-2 border-b last:border-0 text-left text-xs">
+        <p class="font-bold text-slate-800">เลขที่ ${item.student.number} ${esc(item.student.name)} <span class="text-rose-600 font-normal">(ค้าง ${item.missingTopics.length} ข้อ)</span></p>
+        <ul class="list-disc list-inside text-slate-600 mt-1 pl-1 space-y-0.5">
+          ${item.missingTopics.map(t => `<li class="truncate" title="${esc(t)}">${esc(t)}</li>`).join('')}
+        </ul>
+      </div>
+    `).join('');
+
+    Swal.fire({
+      title: 'ยังประเมินไม่ครบทุกข้อ!',
+      html: `
+        <div class="text-left mb-2">
+          <p class="text-xs text-rose-600 font-semibold mb-2">กรุณาประเมินสมรรถนะให้ครบถ้วนทุกข้อก่อนบันทึกข้อมูล (มีนักเรียนที่ยังไม่ครบ ${unassessedList.length} คน):</p>
+          <div class="max-h-48 overflow-y-auto border rounded-lg bg-rose-50/50 p-2 scroll-thin">
+            ${missingSummaryHtml}
+          </div>
+        </div>
+      `,
+      icon: 'error',
+      confirmButtonText: 'กลับไปประเมินให้ครบ',
+      confirmButtonColor: '#ef4444'
+    }).then(() => {
+      // เลื่อน Scroll ไปยังแถวแรกที่ยังไม่ครบ
+      const firstMissingId = unassessedList[0].student.id;
+      const row = document.getElementById('row-stu-' + firstMissingId);
+      if(row){
+        row.scrollIntoView({behavior:'smooth', block:'center'});
+        row.classList.add('bg-rose-100');
+        setTimeout(() => row.classList.remove('bg-rose-100'), 2500);
+      }
+    });
+    return;
+  }
+
+  // หากประเมินครบถ้วน ยืนยันการบันทึก
+  const confirmResult = await Swal.fire({
+    title: 'ยืนยันการบันทึกผลการประเมิน?',
+    html: `
+      <div class="text-left text-xs text-slate-600 space-y-1">
+        <p>• วิชา: <b>${esc(db.subjects.find(s=>s.id===subjectId)?.name || '')}</b></p>
+        <p>• ชั้นเรียน: <b>${esc(db.classes.find(c=>c.id===classId)?.name || '')}</b></p>
+        <p>• สมรรถนะ: <b>${esc(mainTopic.name)}</b></p>
+        <p>• จำนวนนักเรียนที่ประเมิน: <b>${sts.length}</b> คน</p>
+        <p class="text-emerald-700 font-bold mt-2">✓ ประเมินครบถ้วนทุกข้อ 100%</p>
+      </div>
+    `,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'บันทึกข้อมูล',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: db.settings.primary
+  });
+
+  if(!confirmResult.isConfirmed) return;
+
+  // ทำการบันทึกลง Local Database
+  const recordsToSync = [];
+  sts.forEach(s => {
+    leaves.forEach(l => {
+      const score = scores[s.id + '|' + l.node.id];
+      const existing = db.assessments.find(a => 
+        a.teacherId === state.user.id && 
+        a.termId === termId && 
+        a.subjectId === subjectId && 
+        a.classId === classId && 
+        a.type === type && 
+        a.studentId === s.id && 
+        a.topicId === l.node.id
+      );
+
+      if(existing){
+        existing.score = score;
+      } else {
+        const newRecord = {
+          id: uid(),
+          teacherId: state.user.id,
+          termId,
+          subjectId,
+          classId,
+          type,
+          studentId: s.id,
+          topicId: l.node.id,
+          score
+        };
+        db.assessments.push(newRecord);
+        recordsToSync.push(newRecord);
+      }
+    });
+  });
+
+  // คำนวณสรุปผลห้องเรียนสำหรับบันทึกลงชีทประจำห้องและ Activity Log
+  const studentDetails = sts.map(s => {
+    const smap = new Map();
+    leaves.forEach(l => smap.set(l.node.id, scores[s.id + '|' + l.node.id]));
+    const sAvg = computeNodeAvg(mainTopic, smap);
+    return {
+      number: s.number,
+      name: s.name,
+      average: sAvg != null ? sAvg.toFixed(2) : '0.00',
+      qualityText: sAvg != null ? QN[qf(sAvg)] : '-'
+    };
+  });
+
+  const totalClassAvg = avg(studentDetails.map(d => +d.average));
+  const curTermObj = db.terms.find(t => t.id === termId);
+  const termStr = curTermObj ? `${curTermObj.semester}/${curTermObj.year}` : '-';
+  const clsObj = db.classes.find(c => c.id === classId);
+  const subjObj = db.subjects.find(s => s.id === subjectId);
+
+  // บันทึกเข้า Activity Log ของระบบ
+  const newActivityLog = {
+    id: uid(),
+    timestamp: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
+    teacherName: state.user.name,
+    subjectName: subjObj?.name || '',
+    className: clsObj?.name || '',
+    termString: termStr,
+    studentCount: sts.length,
+    averageScore: totalClassAvg != null ? totalClassAvg.toFixed(2) : '0.00',
+    qualityLevel: totalClassAvg != null ? QN[qf(totalClassAvg)] : '-'
+  };
+  
+  db.activityLogs.push(newActivityLog);
+  saveDB();
+
+  // ซิงค์ส่งขึ้น Google Sheets หากมีการกำหนด Apps Script URL
+  let syncMsg = 'บันทึกในเครื่องสำเร็จ';
+  if(db.settings.gasUrl){
+    Swal.fire({
+      title: 'กำลังส่งข้อมูลไปยัง Google Sheets...',
+      text: 'กำลังบันทึกลงชีท Assessments และชีทห้อง_' + (clsObj?.name || ''),
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
+    });
+
+    try {
+      // ดึง records ทั้งหมดของครูท่านนี้ในวิชานี้เพื่ออัปเดตให้ครบ
+      const allTeacherRecords = db.assessments.filter(a => 
+        a.teacherId === state.user.id && 
+        a.termId === termId && 
+        a.subjectId === subjectId && 
+        a.classId === classId && 
+        a.type === type
+      );
+
+      const res = await apiCall('saveAssessments', {
+        records: allTeacherRecords,
+        studentDetails: studentDetails,
+        logInfo: newActivityLog
+      });
+
+      Swal.close();
+      if(res && res.status === 'success'){
+        syncMsg = 'บันทึกลงระบบและส่งขึ้น Google Sheets สำเร็จเรียบร้อย!';
+      } else {
+        syncMsg = 'บันทึกในระบบเรียบร้อย (ส่ง Google Sheets: ' + (res?.message || 'เตือน') + ')';
+      }
+    } catch(err){
+      Swal.close();
+      syncMsg = 'บันทึกในระบบแล้ว (Google Sheets เกิดข้อผิดพลาดในการเชื่อมต่อ)';
+    }
+  }
+
+  Swal.fire({
+    title: 'บันทึกสำเร็จ!',
+    text: syncMsg,
+    icon: 'success',
+    confirmButtonColor: db.settings.primary
+  });
+
+  renderAssessBody();
+}
+
+// ---- Teacher Profile ----
+function teacherProfile(){
+  return `<div class="card p-6 max-w-md mx-auto">
+    <h3 class="font-bold text-slate-800 text-base mb-4 text-center">โปรไฟล์ครูผู้สอน</h3>
+    <div class="space-y-3 bg-slate-50 p-4 rounded-xl border mb-6">
+      <div class="text-center"><label class="text-xs text-slate-500 font-semibold">ชื่อ-นามสกุล</label><p class="font-bold text-slate-800 text-base">${esc(state.user.name)}</p></div>
+      <div class="text-center"><label class="text-xs text-slate-500 font-semibold">ชื่อผู้ใช้ (Username)</label><p class="font-medium text-slate-700">${esc(state.user.username)}</p></div>
+      ${state.user.position ? `<div class="text-center"><label class="text-xs text-slate-500 font-semibold">ตำแหน่ง / วิทยฐานะ</label><p class="font-medium text-slate-700">${esc(state.user.position)}</p></div>` : ''}
+    </div>
+    <div class="border-t pt-4">
+      <h4 class="font-bold text-slate-800 text-sm mb-3 text-center">เปลี่ยนรหัสผ่าน</h4>
+      <input id="old-p" type="password" placeholder="รหัสผ่านปัจจุบัน" class="w-full px-3 py-2 border rounded-lg mb-2 text-sm">
+      <input id="new-p" type="password" placeholder="รหัสผ่านใหม่" class="w-full px-3 py-2 border rounded-lg mb-2 text-sm">
+      <input id="new-p2" type="password" placeholder="ยืนยันรหัสผ่านใหม่" class="w-full px-3 py-2 border rounded-lg mb-3 text-sm">
+      <button onclick="changePassword()" class="btn-primary px-4 py-2.5 rounded-xl text-xs font-bold w-full shadow">บันทึกรหัสผ่านใหม่</button>
+    </div>
+  </div>`;
+}
+
+function changePassword(){
+  const old = $('#old-p').value, n1 = $('#new-p').value, n2 = $('#new-p2').value;
+  if(old !== state.user.password){ toast('error', 'รหัสผ่านปัจจุบันไม่ถูกต้อง'); return; }
+  if(!n1 || n1 !== n2){ toast('error', 'รหัสผ่านใหม่ไม่ตรงกัน'); return; }
+  state.user.password = n1;
+  saveDB();
+  toast('success', 'เปลี่ยนรหัสผ่านสำเร็จ');
+}
+
+// =================== HEADER & NAVIGATION ===================
+function dashHeader(subtitle, role){
+  const logo = db.settings.logo 
+    ? `<img src="${db.settings.logo}" class="w-10 h-10 object-contain rounded-full bg-white p-0.5 shadow-sm">`
+    : `<div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold shadow-sm">ว</div>`;
+
+  return `<header class="text-white shadow-md" style="background:linear-gradient(135deg, ${db.settings.primary}, ${db.settings.primary}dd)">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+      <div class="flex items-center gap-3">
+        ${logo}
+        <div>
+          <h1 class="text-sm md:text-base font-extrabold tracking-wide">ระบบประเมินสมรรถนะสำคัญของผู้เรียน</h1>
+          <p class="text-xs text-emerald-100 font-medium">${esc(subtitle)}</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        ${state.user ? `
+          <span class="text-xs bg-white/10 px-3 py-1.5 rounded-lg border border-white/20 font-medium hidden sm:inline">
+            👤 ${esc(state.user.name)} (${state.user.role === 'admin' ? 'ผู้ดูแล' : 'ครู'})
+          </span>
+          <button onclick="logout()" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition">ออกจากระบบ</button>
+        ` : `
+          <button onclick="navigate('home')" class="bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg text-xs font-semibold transition">หน้าแรก</button>
+          <button onclick="openLoginModal()" class="bg-white text-emerald-800 hover:bg-emerald-50 px-3 py-1.5 rounded-lg text-xs font-bold transition shadow">เข้าสู่ระบบ</button>
+        `}
+      </div>
+    </div>
+  </header>`;
+}
+
+function logout(){
+  Swal.fire({
+    title: 'ออกจากระบบ?',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'ออกจากระบบ',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#ef4444'
+  }).then(r => {
+    if(r.isConfirmed){
+      state.user = null;
+      state.view = 'home';
+      toast('success', 'ออกจากระบบเรียบร้อย');
+      render();
+    }
+  });
+}
+
+// =================== BOOTSTRAP ===================
+function boot(){
+  loadDB();
+  applyTheme();
+  render();
+}
+boot();
+</script>
+</body>
+</html>
