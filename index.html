@@ -336,19 +336,24 @@ function saveDB(){ localStorage.setItem('assessApp_v2', JSON.stringify(db)); }
 // =================== GOOGLE SHEETS & DRIVE SYNC API ===================
 async function apiCall(action, payload={}) {
   const url = db.settings.gasUrl || DEFAULT_GAS_URL;
-  if(!url){
-    console.warn('ยังไม่ได้ระบุ Google Apps Script Web App URL');
-    return null;
-  }
+  if (!url) throw new Error('ยังไม่ได้ระบุ Google Apps Script Web App URL');
+  const ctrl = new AbortController();
+  const tid = setTimeout(() => ctrl.abort(), 30000);
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action, ...payload })
+      body: JSON.stringify({ action, ...payload }),
+      redirect: 'follow',
+      signal: ctrl.signal
     });
-    return await res.json();
+    clearTimeout(tid);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+    const data = await res.json();
+    if (data.status === 'error') throw new Error(data.message || 'Unknown API error');
+    return data;
   } catch (err) {
-    console.error('API Error:', err);
+    clearTimeout(tid);
     throw err;
   }
 }
@@ -359,65 +364,55 @@ async function apiCall(action, payload={}) {
  */
 async function fetchCloudData(silent = false){
   const url = db.settings.gasUrl || DEFAULT_GAS_URL;
-  if(!url) return;
-  if(isSyncingCloud) return;
+  if (!url || isSyncingCloud) return;
   isSyncingCloud = true;
-
-  if(!silent){
-    Swal.fire({
-      title: 'กำลังดึงข้อมูลล่าสุด...',
-      text: 'กำลังโหลดข้อมูลจาก Google Sheets',
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
-    });
+  if (!silent) {
+    Swal.fire({title:'กำลังดึงข้อมูล...', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
   }
-
   try {
-    // ดึงข้อมูลผ่าน action getData
     const res = await apiCall('getData');
-    if(res && res.status === 'success' && res.data){
-      const d = res.data;
-      if(Array.isArray(d.users) && d.users.length) db.users = d.users;
-      if(Array.isArray(d.terms) && d.terms.length) db.terms = d.terms;
-      if(Array.isArray(d.subjectGroups) && d.subjectGroups.length) db.subjectGroups = d.subjectGroups;
-      if(Array.isArray(d.subjects) && d.subjects.length) db.subjects = d.subjects;
-      if(Array.isArray(d.levels) && d.levels.length) db.levels = d.levels;
-      if(Array.isArray(d.classes) && d.classes.length) db.classes = d.classes;
-      if(Array.isArray(d.students) && d.students.length) db.students = d.students;
-      if(Array.isArray(d.assessments)) db.assessments = d.assessments;
-      if(Array.isArray(d.activityLogs)) db.activityLogs = d.activityLogs;
+    const d = res && res.data;
+    if (!d) throw new Error('ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์');
 
-      if(d.topics && (d.topics.junior || d.topics.senior)){
-        if(d.topics.junior) db.topics.junior = d.topics.junior;
-        if(d.topics.senior) db.topics.senior = d.topics.senior;
-      }
-
-      if(d.settings){
-        if(d.settings.logo) db.settings.logo = d.settings.logo;
-        if(d.settings.primary) db.settings.primary = d.settings.primary;
-        if(d.settings.secondary) db.settings.secondary = d.settings.secondary;
-      }
-
-      saveDB();
-      applyTheme();
-      render();
-
-      if(!silent){
-        Swal.close();
-        toast('success', 'ซิงค์ข้อมูลล่าสุดจาก Google Sheets สำเร็จ');
-      } else {
-        console.log('Auto-synced with Google Sheets successfully');
-      }
+    if (Array.isArray(d.users) && d.users.length) db.users = d.users;
+    if (Array.isArray(d.terms) && d.terms.length) db.terms = d.terms;
+    if (Array.isArray(d.subjectGroups) && d.subjectGroups.length) db.subjectGroups = d.subjectGroups;
+    if (Array.isArray(d.subjects) && d.subjects.length) db.subjects = d.subjects;
+    if (Array.isArray(d.levels) && d.levels.length) db.levels = d.levels;
+    if (Array.isArray(d.classes) && d.classes.length) db.classes = d.classes;
+    if (Array.isArray(d.students) && d.students.length) db.students = d.students;
+    if (Array.isArray(d.assessments)) db.assessments = d.assessments;
+    if (Array.isArray(d.activityLogs)) db.activityLogs = d.activityLogs;
+    if (d.topics) {
+      if (d.topics.junior) db.topics.junior = d.topics.junior;
+      if (d.topics.senior) db.topics.senior = d.topics.senior;
     }
-  } catch(err){
-    console.warn('Cannot fetch from Google Sheets:', err);
-    if(!silent){
+    if (d.settings) {
+      ['logo','primary','secondary'].forEach(k => { if (d.settings[k]) db.settings[k] = d.settings[k]; });
+    }
+    saveDB(); applyTheme(); render();
+    if (!silent) { Swal.close(); toast('success', 'ซิงค์ข้อมูลสำเร็จ'); }
+  } catch (err) {
+    console.error('fetchCloudData:', err);
+    if (!silent) {
       Swal.close();
-      Swal.fire('ข้อผิดพลาดการเชื่อมต่อ', 'ไม่สามารถดึงข้อมูลจาก Google Sheets ได้ กรุณาตรวจสอบอินเทอร์เน็ตหรือ URL เว็บแอป', 'error');
+      Swal.fire({
+        title:'เชื่อมต่อ Google Sheets ไม่สำเร็จ',
+        html:`<div class="text-left text-xs">
+          <p class="mb-2"><b>สาเหตุที่เป็นไปได้:</b></p>
+          <ul class="list-disc list-inside space-y-1 text-slate-600">
+            <li>ยังไม่ได้ Deploy Web App (Execute as: <b>Me</b>, Who has access: <b>Anyone</b>)</li>
+            <li>URL ใน Settings ไม่ถูกต้อง หรือเป็นเวอร์ชันเก่า</li>
+            <li>Script ไม่ได้ Bind กับ Google Sheet</li>
+          </ul>
+          <p class="mt-2 text-rose-600 font-mono text-[11px]">${esc(err.message)}</p>
+        </div>`,
+        icon:'error'
+      });
+    } else {
+      toast('warning', 'ใช้ข้อมูลในเครื่อง (ออฟไลน์) — กด "ดึงข้อมูลสด" เพื่อลองใหม่');
     }
-  } finally {
-    isSyncingCloud = false;
-  }
+  } finally { isSyncingCloud = false; }
 }
 
 // =================== TREE HELPERS ===================
@@ -510,8 +505,8 @@ function footerHTML(){
 // =================== HOME ===================
 function viewHome(){
   const logo = db.settings.logo 
-    ? `<img src="${db.settings.logo}" class="w-32 h-32 object-contain mx-auto rounded-full shadow-md bg-white p-1">`
-    : `<div class="w-32 h-32 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 mx-auto flex items-center justify-center text-white text-4xl font-bold shadow-lg">ว</div>`;
+  ? `<img src="${db.settings.logo}" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'w-32 h-32 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 mx-auto flex items-center justify-center text-white text-4xl font-bold shadow-lg',textContent:'ว'}))" class="w-32 h-32 object-contain mx-auto rounded-full shadow-md bg-white p-1">`
+  : `<div class="w-32 h-32 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 mx-auto flex items-center justify-center text-white text-4xl font-bold shadow-lg">ว</div>`;
   return `<div class="min-h-screen flex flex-col bg-slate-50">
     <header class="bg-white shadow-sm border-b">
       <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -1561,9 +1556,8 @@ function adminSettings(){
           <input id="gas-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(db.settings.gasUrl||'')}" class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white font-mono">
         </div>
         <div class="flex flex-wrap gap-2 pt-2">
-          <button onclick="saveAndAutoConnectGas()" class="btn-primary px-5 py-2.5 rounded-xl text-xs font-bold shadow flex items-center gap-1.5">
-            💾 บันทึก URL & เชื่อมต่ออัตโนมัติ
-          </button>
+          <button onclick="saveAndAutoConnectGas()" class="btn-primary px-5 py-2.5 rounded-xl text-xs font-bold shadow">💾 บันทึก & เชื่อมต่อ</button>
+<button onclick="testConnection()" class="btn-outline px-4 py-2.5 rounded-xl text-xs font-bold">🔍 ทดสอบการเชื่อมต่อ</button>
         </div>
       </div>
     </div>
@@ -1649,37 +1643,68 @@ async function saveAndAutoConnectGas(){
     });
   }
 }
-
+async function testConnection(){
+  const url = $('#gas-url').value.trim();
+  if (!url) { Swal.fire('แจ้งเตือน','กรุณาระบุ URL ก่อน','warning'); return; }
+  db.settings.gasUrl = url; saveDB();
+  Swal.fire({title:'กำลังทดสอบ...', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
+  try {
+    const r = await apiCall('testConnection');
+    Swal.fire({
+      title:'✅ เชื่อมต่อสำเร็จ',
+      html:`<div class="text-left text-xs">
+        <p><b>Spreadsheet:</b> ${esc(r.spreadsheetName || '-')}</p>
+        <p><b>ID:</b> <code class="text-[10px]">${esc(r.spreadsheetId || '-')}</code></p>
+        <p><b>โฟลเดอร์ Drive:</b> ${r.folderAccessible ? '✅ เข้าถึงได้: '+esc(r.folderName) : '❌ เข้าถึงไม่ได้ (ID: 1ehgB_CLugTr96TwYLTbSISYyO4K5rGob)'}</p>
+        <p class="mt-2"><b>Sheets:</b> ${esc((r.sheets||[]).join(', '))}</p>
+      </div>`, icon:'success'
+    });
+  } catch(err){
+    Swal.fire({
+      title:'❌ เชื่อมต่อไม่สำเร็จ',
+      html:`<div class="text-left text-xs">
+        <p class="text-rose-700 font-mono bg-rose-50 p-2 rounded">${esc(err.message)}</p>
+        <p class="mt-2 text-slate-600"><b>ตรวจสอบ:</b></p>
+        <ol class="list-decimal list-inside text-slate-600 space-y-1">
+          <li>Deploy > Manage deployments > Execute as: <b>Me</b></li>
+          <li>Who has access: <b>Anyone</b> (ไม่ใช่ "Anyone with Google account")</li>
+          <li>ถ้าเป็น standalone script ต้องใส่ <code>SPREADSHEET_ID</code> ใน code.gs</li>
+        </ol>
+      </div>`, icon:'error'
+    });
+  }
+}
 async function uploadLogoFile(e){
   const f = e.target.files[0];
-  if(!f) return;
+  if (!f) return;
+  if (f.size > 5 * 1024 * 1024) { toast('error', 'ไฟล์ใหญ่เกิน 5MB'); return; }
+
   const reader = new FileReader();
   reader.onload = async (ev) => {
-    const base64Data = ev.target.result;
-    db.settings.logo = base64Data;
-    saveDB();
-    render();
+    db.settings.logo = ev.target.result;
+    saveDB(); render();
 
-    // ถ้ามี GAS URL ให้อัปโหลดเข้า Google Drive โฟลเดอร์ DRIVE_FOLDER_ID
-    if(db.settings.gasUrl){
-      toast('info', 'กำลังส่งรูปภาพไปยัง Google Drive...');
-      try {
-        const res = await apiCall('uploadFile', {
-          base64Data: base64Data,
-          fileName: 'logo_' + f.name,
-          mimeType: f.type
-        });
-        if(res && res.fileUrl){
-          db.settings.logo = res.fileUrl;
-          saveDB();
-          toast('success', 'บันทึกลง Google Drive เรียบร้อย');
-          render();
-        }
-      } catch(err){
-        console.warn('อัปโหลดเข้า Drive ไม่สำเร็จ บันทึกในระบบเรียบร้อย', err);
+    if (!db.settings.gasUrl) {
+      toast('success', 'บันทึกโลโก้ในเครื่องแล้ว (ยังไม่เชื่อม Google Drive)');
+      return;
+    }
+
+    toast('info', 'กำลังอัปโหลดไป Google Drive...');
+    try {
+      const res = await apiCall('uploadFile', {
+        base64Data: ev.target.result,
+        fileName: 'logo_' + Date.now() + '_' + f.name,
+        mimeType: f.type
+      });
+      if (res && res.fileUrl) {
+        db.settings.logo = res.fileUrl;
+        saveDB(); render();
+        try { await apiCall('saveSetting', {key:'logo', value: res.fileUrl}); } catch(_){}
+        toast('success', 'อัปโหลดโลโก้สำเร็จ');
       }
-    } else {
-      toast('success', 'อัปโหลดภาพสำเร็จ');
+    } catch(err) {
+      console.warn(err);
+      toast('warning', 'อัปโหลดไม่สำเร็จ — ใช้รูปจากเครื่องแทน (' + err.message + ')');
     }
   };
   reader.readAsDataURL(f);
@@ -2489,9 +2514,9 @@ function changePassword(){
 
 // =================== HEADER & NAVIGATION ===================
 function dashHeader(subtitle, role){
-  const logo = db.settings.logo 
-    ? `<img src="${db.settings.logo}" class="w-10 h-10 object-contain rounded-full bg-white p-0.5 shadow-sm">`
-    : `<div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold shadow-sm">ว</div>`;
+  const logo = db.settings.logo
+  ? `<img src="${db.settings.logo}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" class="w-10 h-10 object-contain rounded-full bg-white p-0.5 shadow-sm"><div style="display:none" class="w-10 h-10 rounded-full bg-white/20 items-center justify-center text-white font-bold">ว</div>`
+  : `<div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white font-bold shadow-sm">ว</div>`;
 
   return `<header class="text-white shadow-md" style="background:linear-gradient(135deg, ${db.settings.primary}, ${db.settings.primary}dd)">
     <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between flex-wrap gap-2">
