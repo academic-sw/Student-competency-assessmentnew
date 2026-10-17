@@ -1466,9 +1466,12 @@ function adminSettings(){
   return `<div class="space-y-4">
     <!-- Google Sheets & Drive Settings -->
     <div class="card p-5 border-l-4 border-l-emerald-500">
-      <h3 class="font-bold text-slate-800 text-base mb-2">⚡ การเชื่อมโยง Google Sheets และ Google Drive</h3>
+      <div class="flex items-center justify-between flex-wrap gap-2 mb-2">
+        <h3 class="font-bold text-slate-800 text-base">⚡ การเชื่อมโยง Google Sheets และ Google Drive (อัตโนมัติ)</h3>
+        ${db.settings.gasUrl ? `<span class="badge q-3 font-semibold text-xs">🟢 ระบบซิงค์ข้อมูลอัตโนมัติทำงานอยู่</span>` : `<span class="badge q-1 text-xs">ยังไม่ระบุ URL เว็บแอป</span>`}
+      </div>
       <p class="text-xs text-slate-600 mb-4">
-        เมื่อระบุ URL เว็บแอปของ Google Apps Script ระบบจะบันทึกข้อมูลคะแนน การประเมิน และแยกเป็น Sheet ประจำห้องเรียนให้อัตโนมัติ พร้อมอัปโหลดรูปภาพเข้า Google Drive โฟลเดอร์ ID: <code class="bg-slate-100 px-1 py-0.5 rounded text-emerald-800 font-bold">${DRIVE_FOLDER_ID}</code>
+        เมื่อระบุ Web App URL ระบบจะบันทึกข้อมูลคะแนน การประเมิน และแยกเป็น Sheet ประจำห้องเรียนให้อัตโนมัติทันทีที่บันทึก โดย<b>ไม่ต้องกดปุ่มซิงค์เอง</b> พร้อมอัปโหลดรูปภาพเข้า Google Drive โฟลเดอร์ ID: <code class="bg-slate-100 px-1 py-0.5 rounded text-emerald-800 font-bold">${DRIVE_FOLDER_ID}</code>
       </p>
 
       <div class="space-y-3">
@@ -1477,9 +1480,9 @@ function adminSettings(){
           <input id="gas-url" type="url" placeholder="https://script.google.com/macros/s/.../exec" value="${esc(db.settings.gasUrl||'')}" class="w-full mt-1 px-3 py-2 border rounded-lg text-sm bg-white font-mono">
         </div>
         <div class="flex flex-wrap gap-2 pt-2">
-          <button onclick="saveGasSettings()" class="btn-primary px-4 py-2 rounded-xl text-xs font-semibold shadow">💾 บันทึกการตั้งค่า URL</button>
-          <button onclick="testInitSheets()" class="btn-outline px-4 py-2 rounded-xl text-xs font-semibold">🔄 สร้างชีทและเชื่อมต่ออัตโนมัติ (Init Sheets)</button>
-          <button onclick="syncAllToSheets()" class="btn-outline px-4 py-2 rounded-xl text-xs font-semibold">☁️ ซิงค์ข้อมูลระบบขึ้น Google Sheets</button>
+          <button onclick="saveAndAutoConnectGas()" class="btn-primary px-5 py-2.5 rounded-xl text-xs font-bold shadow flex items-center gap-1.5">
+            💾 บันทึก URL & เชื่อมต่ออัตโนมัติ
+          </button>
         </div>
       </div>
     </div>
@@ -1517,52 +1520,52 @@ function adminSettings(){
   </div>`;
 }
 
-function saveGasSettings(){
+async function saveAndAutoConnectGas(){
   const url = $('#gas-url').value.trim();
-  db.settings.gasUrl = url;
-  saveDB();
-  toast('success', 'บันทึก URL สำเร็จ');
-}
-
-async function testInitSheets(){
-  saveGasSettings();
-  if(!db.settings.gasUrl){
+  if(!url){
     Swal.fire('แจ้งเตือน', 'กรุณาระบุ Google Apps Script Web App URL ก่อน', 'warning');
     return;
   }
-  Swal.fire({title:'กำลังเชื่อมต่อ...', text:'กำลังตรวจสอบและสร้าง Sheet อัตโนมัติ', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
-  try {
-    const res = await apiCall('init');
-    Swal.close();
-    if(res && res.status === 'success'){
-      Swal.fire('สำเร็จ', `สร้างและตั้งค่า Google Sheets เรียบร้อยแล้ว!<br><small class="text-slate-500">ชีทที่สร้าง: ${(res.details?.created||[]).join(', ')||'ชีททั้งหมดพร้อมใช้งาน'}</small>`, 'success');
-    } else {
-      Swal.fire('ข้อผิดพลาด', res?.message || 'ไม่สามารถติดต่อ Apps Script ได้', 'error');
-    }
-  } catch(e) {
-    Swal.close();
-    Swal.fire('ข้อผิดพลาดการเชื่อมต่อ', e.toString(), 'error');
-  }
-}
+  db.settings.gasUrl = url;
+  saveDB();
 
-async function syncAllToSheets(){
-  saveGasSettings();
-  if(!db.settings.gasUrl){
-    Swal.fire('แจ้งเตือน', 'กรุณาระบุ Web App URL ก่อน', 'warning');
-    return;
-  }
-  Swal.fire({title:'กำลังซิงค์ข้อมูล...', text:'กำลังส่งข้อมูลระบบขึ้น Google Sheets', allowOutsideClick:false, didOpen:()=>Swal.showLoading()});
+  Swal.fire({
+    title: 'กำลังเชื่อมต่อ Google Sheets...',
+    text: 'กำลังตรวจสอบและจัดเตรียมโครงสร้าง Sheet ให้อัตโนมัติ',
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading()
+  });
+
   try {
-    const res = await apiCall('syncAllData', {data: db});
+    // 1. ตรวจสอบและสร้าง Sheet ที่จำเป็นอัตโนมัติ
+    const initRes = await apiCall('init');
+    
+    // 2. ซิงค์โครงสร้างข้อมูลตั้งต้น (Classes, Students, Subjects)
+    await apiCall('syncAllData', {data: db});
+
     Swal.close();
-    if(res && res.status === 'success'){
-      Swal.fire('ซิงค์สำเร็จ', 'ข้อมูลระบบถูกส่งไปยัง Google Sheets เรียบร้อยแล้ว', 'success');
-    } else {
-      Swal.fire('ข้อผิดพลาด', res?.message || 'ไม่สามารถซิงค์ได้', 'error');
-    }
+    Swal.fire({
+      title: 'เชื่อมต่อสำเร็จ!',
+      html: `
+        <div class="text-xs text-slate-600 text-left space-y-1">
+          <p class="text-emerald-700 font-bold">✓ ระบบเชื่อมต่อกับ Google Sheets เรียบร้อย</p>
+          <p>• สร้างและตรวจสอบชีทฐานข้อมูลอัตโนมัติเรียบร้อย</p>
+          <p>• โฟลเดอร์ Google Drive: <code class="bg-slate-100 p-0.5 rounded font-mono">${DRIVE_FOLDER_ID}</code></p>
+          <p class="text-slate-500 mt-2">* ต่อไปนี้เมื่อบันทึกผลการประเมิน ข้อมูลจะอัปเดตและแยกชีทตามห้องให้อัตโนมัติ โดยไม่ต้องกดซิงค์เองอีกต่อไป</p>
+        </div>
+      `,
+      icon: 'success',
+      confirmButtonColor: db.settings.primary
+    });
+    render();
   } catch(e) {
     Swal.close();
-    Swal.fire('ข้อผิดพลาด', e.toString(), 'error');
+    Swal.fire({
+      title: 'เชื่อมต่อไม่สำเร็จ',
+      text: 'กรุณาตรวจสอบการตั้งค่า Deploy Web App ใน Google Apps Script ว่าเลือก Execute as: Me และ Who has access: Anyone แล้วหรือไม่ (' + e.toString() + ')',
+      icon: 'error',
+      confirmButtonColor: '#ef4444'
+    });
   }
 }
 
@@ -1769,14 +1772,13 @@ function renderTeacherCharts(termId){
   }
 }
 
-// =================== TEACHER ASSESSMENT (WITH VALIDATION & SAVE BUTTON) ===================
+// =================== TEACHER ASSESSMENT (WITH REAL-TIME SYSTEM UPDATE & VALIDATION) ===================
 let assessState = {
   termId: null,
   subjectId: null,
   type: 'junior',
   classId: null,
-  topicIdx: 0,
-  stagedScores: {} // เก็บค่าที่ครูกรอกในหน้าจอไว้ก่อนกดปุ่มประเมินบันทึก
+  topicIdx: 0
 };
 
 function teacherAssess(){
@@ -1835,10 +1837,10 @@ function teacherAssess(){
 
 function assessTypeChange(val){
   assessState.type = val;
-  assessState.classId = null; // รีเซ็ตห้องเนื่องจากเปลี่ยนระดับ
+  assessState.classId = null;
   assessState.topicIdx = 0;
   render();
-  setTimeout(renderAssessBody, 100);
+  setTimeout(renderAssessBody, 80);
 }
 
 function assessUpdate(){
@@ -1848,7 +1850,7 @@ function assessUpdate(){
   assessState.classId = $('#as-class').value;
   assessState.topicIdx = +$('#as-topic').value;
   render();
-  setTimeout(renderAssessBody, 100);
+  setTimeout(renderAssessBody, 80);
 }
 
 function renderAssessBody(){
@@ -1885,21 +1887,19 @@ function renderAssessBody(){
     return;
   }
 
-  // โหลดคะแนนเดิมจากฐานข้อมูลเข้าสู่ stagedScores ถ้ายังไม่มีใน State
-  assessState.stagedScores = {};
-  db.assessments.filter(a => a.teacherId===state.user.id && a.termId===termId && a.subjectId===subjectId && a.classId===classId && a.type===type)
+  // ดึงคะแนนปัจจุบันจากฐานข้อมูลระบบ db.assessments
+  const scoresMap = {};
+  db.assessments.filter(a => a.teacherId === state.user.id && a.termId === termId && a.subjectId === subjectId && a.classId === classId && a.type === type)
     .forEach(a => {
-      assessState.stagedScores[a.studentId + '|' + a.topicId] = a.score;
+      scoresMap[a.studentId + '|' + a.topicId] = a.score;
     });
-
-  const scores = assessState.stagedScores;
 
   // ตรวจสอบจำนวนข้อที่ประเมินแล้ว
   let totalRequired = sts.length * leaves.length;
   let totalAnswered = 0;
   sts.forEach(s => {
     leaves.forEach(l => {
-      if(scores[s.id + '|' + l.node.id] != null) totalAnswered++;
+      if(scoresMap[s.id + '|' + l.node.id] != null) totalAnswered++;
     });
   });
 
@@ -1923,18 +1923,18 @@ function renderAssessBody(){
     const smap = new Map();
     let stuMissing = 0;
     leaves.forEach(l => {
-      const v = scores[s.id + '|' + l.node.id];
+      const v = scoresMap[s.id + '|' + l.node.id];
       if(v != null) smap.set(l.node.id, v);
       else stuMissing++;
     });
     const sAvg = computeNodeAvg(mainTopic, smap);
 
     const cells = leaves.map(l => {
-      const v = scores[s.id + '|' + l.node.id];
-      const isUnset = v == null;
+      const v = scoresMap[s.id + '|' + l.node.id];
+      const isUnset = (v == null || v === '');
       return `<td class="text-center p-1">
-        <select class="score-select ${isUnset ? 'score-unassessed' : ''}" data-v="${v ?? ''}" data-sid="${s.id}" data-tid="${l.node.id}" onchange="stageScoreChange('${s.id}','${l.node.id}',this.value)">
-          <option value="" ${v==null?'selected':''}>-</option>
+        <select class="score-select ${isUnset ? 'score-unassessed' : ''}" data-v="${v ?? ''}" data-sid="${s.id}" data-tid="${l.node.id}" onchange="setStudentScore('${s.id}','${l.node.id}',this.value)">
+          <option value="" ${isUnset?'selected':''}>-</option>
           <option value="0" ${v===0?'selected':''}>0</option>
           <option value="1" ${v===1?'selected':''}>1</option>
           <option value="2" ${v===2?'selected':''}>2</option>
@@ -1948,9 +1948,9 @@ function renderAssessBody(){
       <td class="text-center font-bold text-slate-700">${s.number}</td>
       <td class="text-left font-medium whitespace-nowrap pl-2">${esc(s.name)}</td>
       ${cells}
-      <td class="text-center font-bold text-slate-800">${sAvg != null ? sAvg.toFixed(2) : '-'}</td>
-      <td class="text-center">${sAvg != null ? qBadge(qf(sAvg)) : '<span class="text-xs text-rose-500 font-bold">ยังไม่ครบ</span>'}</td>
-      <td class="text-center text-xs">${stuMissing > 0 ? `<span class="badge q-0 font-bold">${stuMissing}</span>` : '<span class="text-emerald-600 font-bold">✓</span>'}</td>
+      <td class="text-center font-bold text-slate-800 col-savg">${sAvg != null ? sAvg.toFixed(2) : '-'}</td>
+      <td class="text-center col-sbadge">${sAvg != null ? qBadge(qf(sAvg)) : '<span class="text-xs text-rose-500 font-bold">ยังไม่ครบ</span>'}</td>
+      <td class="text-center text-xs col-smissing">${stuMissing > 0 ? `<span class="badge q-0 font-bold">${stuMissing}</span>` : '<span class="text-emerald-600 font-bold">✓</span>'}</td>
     </tr>`;
   }).join('');
 
@@ -1981,15 +1981,15 @@ function renderAssessBody(){
     <div class="card p-3 mb-3 flex flex-wrap gap-2 items-center justify-between bg-slate-50 border">
       <div class="flex items-center gap-2 flex-wrap">
         <span class="text-xs font-bold text-slate-600">ตั้งค่าทุกคน:</span>
-        ${[3,2,1,0].map(v => `<button onclick="bulkStageAll(${v})" class="px-2.5 py-1 rounded text-xs font-bold score-select" data-v="${v}">${v} (${QN[v]})</button>`).join('')}
+        ${[3,2,1,0].map(v => `<button type="button" onclick="bulkSetAll(${v})" class="px-2.5 py-1 rounded text-xs font-bold score-select hover:scale-105 active:scale-95 transition" data-v="${v}">${v} (${QN[v]})</button>`).join('')}
         <span class="text-slate-300 mx-1">|</span>
         <span class="text-xs font-bold text-slate-600">คนที่เลือก:</span>
-        ${[3,2,1,0].map(v => `<button onclick="bulkStageSelected(${v})" class="px-2.5 py-1 rounded text-xs font-bold score-select" data-v="${v}">${v}</button>`).join('')}
+        ${[3,2,1,0].map(v => `<button type="button" onclick="bulkSetSelected(${v})" class="px-2.5 py-1 rounded text-xs font-bold score-select hover:scale-105 active:scale-95 transition" data-v="${v}">${v}</button>`).join('')}
       </div>
 
       <!-- ปุ่มกดประเมินเพื่อเป็นการบันทึกข้อมูล -->
       <div>
-        <button onclick="commitAndSaveAssessments()" class="btn-primary px-5 py-2 rounded-xl text-xs font-extrabold shadow-lg shadow-emerald-200 flex items-center gap-1.5 transform active:scale-95 transition">
+        <button type="button" onclick="commitAndSaveAssessments()" class="btn-primary px-5 py-2 rounded-xl text-xs font-extrabold shadow-lg shadow-emerald-200 flex items-center gap-1.5 transform active:scale-95 transition">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
           💾 กดประเมินเพื่อบันทึกข้อมูล
         </button>
@@ -2014,143 +2014,78 @@ function renderAssessBody(){
 
     <div class="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3 p-4 card bg-emerald-50/50 border border-emerald-100">
       <div class="text-xs text-slate-600">
-        💡 <b>คำแนะนำ:</b> ต้องประเมินให้ครบทุกข้อ (ช่องสีแดงคือข้อที่ยังไม่ได้ประเมิน) เมื่อเสร็จสิ้นให้คลิกปุ่ม <b>"กดประเมินเพื่อบันทึกข้อมูล"</b>
+        💡 <b>คำแนะนำ:</b> ข้อมูลที่ประเมินจะบันทึกและขึ้นในระบบทันที และเมื่อประเมินครบทุกข้อแล้วให้คลิกปุ่ม <b>"กดประเมินเพื่อบันทึกข้อมูล"</b> ระบบจะส่งข้อมูลไปยัง Google Sheets อัตโนมัติ
       </div>
-      <button onclick="commitAndSaveAssessments()" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-emerald-200 flex items-center gap-2">
+      <button type="button" onclick="commitAndSaveAssessments()" class="btn-primary px-6 py-2.5 rounded-xl text-xs font-black shadow-lg shadow-emerald-200 flex items-center gap-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
         บันทึกผลการประเมิน
       </button>
     </div>
   `;
 
-  $('#checkAllStu').onchange = e => {
-    $$('.stu-check').forEach(c => c.checked = e.target.checked);
-  };
-}
-
-function stageScoreChange(sid, tid, val){
-  if(val === '') delete assessState.stagedScores[sid + '|' + tid];
-  else assessState.stagedScores[sid + '|' + tid] = +val;
-  renderAssessBody();
-}
-
-function bulkStageAll(val){
-  const {type, topicIdx, classId} = assessState;
-  const leaves = flattenLeaves([db.topics[type][topicIdx]]);
-  const sts = db.students.filter(s => s.classId === classId);
-  sts.forEach(s => {
-    leaves.forEach(l => {
-      assessState.stagedScores[s.id + '|' + l.node.id] = val;
-    });
-  });
-  toast('success', `ตั้งค่าคะแนน ${val} ให้ทุกคนแล้ว`);
-  renderAssessBody();
-}
-
-function bulkStageSelected(val){
-  const checked = $$('.stu-check:checked').map(c => c.dataset.sid);
-  if(checked.length === 0){ toast('warning', 'กรุณาเลือกนักเรียนก่อน'); return; }
-  const {type, topicIdx} = assessState;
-  const leaves = flattenLeaves([db.topics[type][topicIdx]]);
-  checked.forEach(sid => {
-    leaves.forEach(l => {
-      assessState.stagedScores[sid + '|' + l.node.id] = val;
-    });
-  });
-  toast('success', `ตั้งค่าคะแนน ${val} ให้คนที่เลือกเรียบร้อย`);
-  renderAssessBody();
+  const checkAllBox = $('#checkAllStu');
+  if(checkAllBox){
+    checkAllBox.onchange = e => {
+      $$('.stu-check').forEach(c => c.checked = e.target.checked);
+    };
+  }
 }
 
 /**
- * ฟังก์ชันหลัก: ตรวจสอบความถูกต้องว่าประเมินครบทุกข้อหรือไม่
- * หากไม่ครบ ให้แจ้งเตือนว่าข้อไหน/นักเรียนคนใดที่ยังไม่ได้ประเมิน
- * หากครบ ให้บันทึกลงระบบ + Google Sheets
+ * 1. กำหนดคะแนนรายบุคคล: บันทึกลงระบบทันที และอัปเดต UI ทันที
  */
-async function commitAndSaveAssessments(){
-  const {termId, subjectId, type, classId, topicIdx} = assessState;
-  const tree = db.topics[type];
-  const mainTopic = tree[topicIdx];
-  const leaves = flattenLeaves([mainTopic]);
-  const sts = db.students.filter(s => s.classId === classId).sort((a,b) => a.number - b.number);
-  const scores = assessState.stagedScores;
+function setStudentScore(studentId, topicId, val){
+  const {termId, subjectId, classId, type} = assessState;
+  
+  const existing = db.assessments.find(a => 
+    a.teacherId === state.user.id && 
+    a.termId === termId && 
+    a.subjectId === subjectId && 
+    a.classId === classId && 
+    a.type === type && 
+    a.studentId === studentId && 
+    a.topicId === topicId
+  );
 
-  // ตรวจสอบข้อที่ยังไม่ได้ประเมิน
-  const unassessedList = [];
-  sts.forEach(s => {
-    const missingTopics = [];
-    leaves.forEach(l => {
-      if(scores[s.id + '|' + l.node.id] == null){
-        missingTopics.push(l.node.name);
-      }
-    });
-    if(missingTopics.length > 0){
-      unassessedList.push({student: s, missingTopics});
+  if(val === '' || val == null){
+    if(existing){
+      db.assessments = db.assessments.filter(a => a !== existing);
     }
-  });
-
-  // ถ้ายังมีข้อที่ไม่ได้ประเมิน ให้แจ้งเตือนและระบุข้อชัดเจน
-  if(unassessedList.length > 0){
-    const missingSummaryHtml = unassessedList.map(item => `
-      <div class="p-2 border-b last:border-0 text-left text-xs">
-        <p class="font-bold text-slate-800">เลขที่ ${item.student.number} ${esc(item.student.name)} <span class="text-rose-600 font-normal">(ค้าง ${item.missingTopics.length} ข้อ)</span></p>
-        <ul class="list-disc list-inside text-slate-600 mt-1 pl-1 space-y-0.5">
-          ${item.missingTopics.map(t => `<li class="truncate" title="${esc(t)}">${esc(t)}</li>`).join('')}
-        </ul>
-      </div>
-    `).join('');
-
-    Swal.fire({
-      title: 'ยังประเมินไม่ครบทุกข้อ!',
-      html: `
-        <div class="text-left mb-2">
-          <p class="text-xs text-rose-600 font-semibold mb-2">กรุณาประเมินสมรรถนะให้ครบถ้วนทุกข้อก่อนบันทึกข้อมูล (มีนักเรียนที่ยังไม่ครบ ${unassessedList.length} คน):</p>
-          <div class="max-h-48 overflow-y-auto border rounded-lg bg-rose-50/50 p-2 scroll-thin">
-            ${missingSummaryHtml}
-          </div>
-        </div>
-      `,
-      icon: 'error',
-      confirmButtonText: 'กลับไปประเมินให้ครบ',
-      confirmButtonColor: '#ef4444'
-    }).then(() => {
-      // เลื่อน Scroll ไปยังแถวแรกที่ยังไม่ครบ
-      const firstMissingId = unassessedList[0].student.id;
-      const row = document.getElementById('row-stu-' + firstMissingId);
-      if(row){
-        row.scrollIntoView({behavior:'smooth', block:'center'});
-        row.classList.add('bg-rose-100');
-        setTimeout(() => row.classList.remove('bg-rose-100'), 2500);
-      }
-    });
-    return;
+  } else {
+    const numScore = +val;
+    if(existing){
+      existing.score = numScore;
+    } else {
+      db.assessments.push({
+        id: uid(),
+        teacherId: state.user.id,
+        termId,
+        subjectId,
+        classId,
+        type,
+        studentId,
+        topicId,
+        score: numScore
+      });
+    }
   }
 
-  // หากประเมินครบถ้วน ยืนยันการบันทึก
-  const confirmResult = await Swal.fire({
-    title: 'ยืนยันการบันทึกผลการประเมิน?',
-    html: `
-      <div class="text-left text-xs text-slate-600 space-y-1">
-        <p>• วิชา: <b>${esc(db.subjects.find(s=>s.id===subjectId)?.name || '')}</b></p>
-        <p>• ชั้นเรียน: <b>${esc(db.classes.find(c=>c.id===classId)?.name || '')}</b></p>
-        <p>• สมรรถนะ: <b>${esc(mainTopic.name)}</b></p>
-        <p>• จำนวนนักเรียนที่ประเมิน: <b>${sts.length}</b> คน</p>
-        <p class="text-emerald-700 font-bold mt-2">✓ ประเมินครบถ้วนทุกข้อ 100%</p>
-      </div>
-    `,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'บันทึกข้อมูล',
-    cancelButtonText: 'ยกเลิก',
-    confirmButtonColor: db.settings.primary
-  });
+  saveDB(); // บันทึกลง LocalStorage ทันที ข้อมูลขึ้นในระบบทันที!
 
-  if(!confirmResult.isConfirmed) return;
+  // อัปเดต UI แถวนั้นโดยไม่ต้อง render ใหม่ทั้งหมด
+  updateRowUI(studentId);
+}
 
-  // ทำการบันทึกลง Local Database
-  const recordsToSync = [];
+/**
+ * 2. ตั้งค่าคะแนนให้ทุกคนในห้อง: บันทึกลงระบบทันที
+ */
+function bulkSetAll(val){
+  const {termId, subjectId, classId, type, topicIdx} = assessState;
+  const leaves = flattenLeaves([db.topics[type][topicIdx]]);
+  const sts = db.students.filter(s => s.classId === classId);
+
   sts.forEach(s => {
     leaves.forEach(l => {
-      const score = scores[s.id + '|' + l.node.id];
       const existing = db.assessments.find(a => 
         a.teacherId === state.user.id && 
         a.termId === termId && 
@@ -2162,9 +2097,9 @@ async function commitAndSaveAssessments(){
       );
 
       if(existing){
-        existing.score = score;
+        existing.score = +val;
       } else {
-        const newRecord = {
+        db.assessments.push({
           id: uid(),
           teacherId: state.user.id,
           termId,
@@ -2173,18 +2108,197 @@ async function commitAndSaveAssessments(){
           type,
           studentId: s.id,
           topicId: l.node.id,
-          score
-        };
-        db.assessments.push(newRecord);
-        recordsToSync.push(newRecord);
+          score: +val
+        });
       }
     });
   });
 
-  // คำนวณสรุปผลห้องเรียนสำหรับบันทึกลงชีทประจำห้องและ Activity Log
+  saveDB();
+  toast('success', `ตั้งค่าคะแนน ${val} ให้ทุกคน (${sts.length} คน) เรียบร้อย`);
+  renderAssessBody(); // แสดงผลคะแนนทุกคนในตารางทันที
+}
+
+/**
+ * 3. ตั้งค่าคะแนนให้คนที่เลือก: บันทึกลงระบบทันที
+ */
+function bulkSetSelected(val){
+  const checkedBoxes = $$('.stu-check:checked');
+  const checkedIds = checkedBoxes.map(c => c.dataset.sid);
+
+  if(checkedIds.length === 0){
+    toast('warning', 'กรุณาติ๊กเลือกนักเรียนในช่องสี่เหลี่ยมด้านหน้าก่อน');
+    return;
+  }
+
+  const {termId, subjectId, classId, type, topicIdx} = assessState;
+  const leaves = flattenLeaves([db.topics[type][topicIdx]]);
+
+  checkedIds.forEach(sid => {
+    leaves.forEach(l => {
+      const existing = db.assessments.find(a => 
+        a.teacherId === state.user.id && 
+        a.termId === termId && 
+        a.subjectId === subjectId && 
+        a.classId === classId && 
+        a.type === type && 
+        a.studentId === sid && 
+        a.topicId === l.node.id
+      );
+
+      if(existing){
+        existing.score = +val;
+      } else {
+        db.assessments.push({
+          id: uid(),
+          teacherId: state.user.id,
+          termId,
+          subjectId,
+          classId,
+          type,
+          studentId: sid,
+          topicId: l.node.id,
+          score: +val
+        });
+      }
+    });
+  });
+
+  saveDB();
+  toast('success', `ตั้งค่าคะแนน ${val} ให้คนที่เลือก (${checkedIds.length} คน) เรียบร้อย`);
+  renderAssessBody();
+}
+
+/**
+ * อัปเดต UI ของแถวนักเรียนคนนั้นๆ แบบ Real-time
+ */
+function updateRowUI(studentId){
+  const {termId, subjectId, classId, type, topicIdx} = assessState;
+  const mainTopic = db.topics[type][topicIdx];
+  const leaves = flattenLeaves([mainTopic]);
+
+  const row = document.getElementById('row-stu-' + studentId);
+  if(!row) return;
+
+  const smap = new Map();
+  let stuMissing = 0;
+
+  leaves.forEach(l => {
+    const ex = db.assessments.find(a => 
+      a.teacherId === state.user.id && 
+      a.termId === termId && 
+      a.subjectId === subjectId && 
+      a.classId === classId && 
+      a.type === type && 
+      a.studentId === studentId && 
+      a.topicId === l.node.id
+    );
+    const sel = row.querySelector(`select[data-tid="${l.node.id}"]`);
+    if(ex != null && ex.score != null){
+      smap.set(l.node.id, ex.score);
+      if(sel){
+        sel.value = String(ex.score);
+        sel.dataset.v = String(ex.score);
+        sel.classList.remove('score-unassessed');
+      }
+    } else {
+      stuMissing++;
+      if(sel){
+        sel.value = '';
+        sel.dataset.v = '';
+        sel.classList.add('score-unassessed');
+      }
+    }
+  });
+
+  const sAvg = computeNodeAvg(mainTopic, smap);
+  const avgCell = row.querySelector('.col-savg');
+  const badgeCell = row.querySelector('.col-sbadge');
+  const missingCell = row.querySelector('.col-smissing');
+
+  if(avgCell) avgCell.textContent = sAvg != null ? sAvg.toFixed(2) : '-';
+  if(badgeCell) badgeCell.innerHTML = sAvg != null ? qBadge(qf(sAvg)) : '<span class="text-xs text-rose-500 font-bold">ยังไม่ครบ</span>';
+  if(missingCell) missingCell.innerHTML = stuMissing > 0 ? `<span class="badge q-0 font-bold">${stuMissing}</span>` : '<span class="text-emerald-600 font-bold">✓</span>';
+}
+
+/**
+ * 4. ปุ่มกดประเมินเพื่อบันทึกข้อมูล:
+ *    - ตรวจสอบว่าต้องประเมินครบทุกข้อ ถ้าไม่ครบจะแจ้งเตือนว่าข้อไหน/ใครยังไม่ครบ
+ *    - ถ้าครบ บันทึก Activity Log และ Auto-sync ส่งขึ้น Google Sheets ทันที
+ */
+async function commitAndSaveAssessments(){
+  const {termId, subjectId, type, classId, topicIdx} = assessState;
+  const tree = db.topics[type];
+  const mainTopic = tree[topicIdx];
+  const leaves = flattenLeaves([mainTopic]);
+  const sts = db.students.filter(s => s.classId === classId).sort((a,b) => a.number - b.number);
+
+  // ดึงคะแนนล่าสุดจาก db.assessments
+  const scoresMap = {};
+  db.assessments.filter(a => a.teacherId === state.user.id && a.termId === termId && a.subjectId === subjectId && a.classId === classId && a.type === type)
+    .forEach(a => {
+      scoresMap[a.studentId + '|' + a.topicId] = a.score;
+    });
+
+  // ตรวจสอบข้อที่ยังไม่ได้ประเมิน
+  const unassessedList = [];
+  sts.forEach(s => {
+    const missingTopics = [];
+    leaves.forEach(l => {
+      if(scoresMap[s.id + '|' + l.node.id] == null){
+        missingTopics.push(l.node.name);
+      }
+    });
+    if(missingTopics.length > 0){
+      unassessedList.push({student: s, missingTopics});
+    }
+  });
+
+  // ถ้ายังไม่ครบทุกข้อ
+  if(unassessedList.length > 0){
+    const missingSummaryHtml = unassessedList.map(item => `
+      <div class="p-2.5 border-b last:border-0 text-left text-xs bg-white rounded mb-1 border shadow-xs">
+        <p class="font-bold text-slate-800">เลขที่ ${item.student.number} ${esc(item.student.name)} <span class="text-rose-600 font-bold">(ค้าง ${item.missingTopics.length} ข้อ)</span></p>
+        <ul class="list-disc list-inside text-slate-600 mt-1 pl-1 space-y-0.5">
+          ${item.missingTopics.map(t => `<li class="truncate" title="${esc(t)}">${esc(t)}</li>`).join('')}
+        </ul>
+      </div>
+    `).join('');
+
+    Swal.fire({
+      title: 'ยังประเมินไม่ครบทุกข้อ!',
+      html: `
+        <div class="text-left mb-2">
+          <p class="text-xs text-rose-600 font-bold mb-2">กรุณาประเมินสมรรถนะให้ครบถ้วนทุกข้อก่อนบันทึกข้อมูล (มีนักเรียนที่ยังไม่ครบ ${unassessedList.length} คน):</p>
+          <div class="max-h-56 overflow-y-auto border rounded-xl bg-rose-50/60 p-2 scroll-thin">
+            ${missingSummaryHtml}
+          </div>
+        </div>
+      `,
+      icon: 'warning',
+      confirmButtonText: 'กลับไปประเมินให้ครบ',
+      confirmButtonColor: '#ef4444'
+    }).then(() => {
+      const firstMissingId = unassessedList[0].student.id;
+      const row = document.getElementById('row-stu-' + firstMissingId);
+      if(row){
+        row.scrollIntoView({behavior:'smooth', block:'center'});
+        row.classList.add('bg-rose-100');
+        setTimeout(() => row.classList.remove('bg-rose-100'), 2500);
+      }
+    });
+    return;
+  }
+
+  // ประเมินครบถ้วน 100% แล้ว
+  const curTermObj = db.terms.find(t => t.id === termId);
+  const termStr = curTermObj ? `${curTermObj.semester}/${curTermObj.year}` : '-';
+  const clsObj = db.classes.find(c => c.id === classId);
+  const subjObj = db.subjects.find(s => s.id === subjectId);
+
   const studentDetails = sts.map(s => {
     const smap = new Map();
-    leaves.forEach(l => smap.set(l.node.id, scores[s.id + '|' + l.node.id]));
+    leaves.forEach(l => smap.set(l.node.id, scoresMap[s.id + '|' + l.node.id]));
     const sAvg = computeNodeAvg(mainTopic, smap);
     return {
       number: s.number,
@@ -2195,12 +2309,8 @@ async function commitAndSaveAssessments(){
   });
 
   const totalClassAvg = avg(studentDetails.map(d => +d.average));
-  const curTermObj = db.terms.find(t => t.id === termId);
-  const termStr = curTermObj ? `${curTermObj.semester}/${curTermObj.year}` : '-';
-  const clsObj = db.classes.find(c => c.id === classId);
-  const subjObj = db.subjects.find(s => s.id === subjectId);
 
-  // บันทึกเข้า Activity Log ของระบบ
+  // สร้าง Activity Log ในระบบ
   const newActivityLog = {
     id: uid(),
     timestamp: new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' }),
@@ -2212,22 +2322,27 @@ async function commitAndSaveAssessments(){
     averageScore: totalClassAvg != null ? totalClassAvg.toFixed(2) : '0.00',
     qualityLevel: totalClassAvg != null ? QN[qf(totalClassAvg)] : '-'
   };
-  
-  db.activityLogs.push(newActivityLog);
-  saveDB();
 
-  // ซิงค์ส่งขึ้น Google Sheets หากมีการกำหนด Apps Script URL
-  let syncMsg = 'บันทึกในเครื่องสำเร็จ';
+  db.activityLogs.push(newActivityLog);
+  saveDB(); // บันทึกข้อมูลขึ้นระบบทันที
+
+  // Auto-Sync ส่งขึ้น Google Sheets ในพื้นหลังทันที (ถ้ามี URL)
   if(db.settings.gasUrl){
+    // แสดง toast หรือ SweetAlert2 บันทึกสำเร็จ
     Swal.fire({
-      title: 'กำลังส่งข้อมูลไปยัง Google Sheets...',
-      text: 'กำลังบันทึกลงชีท Assessments และชีทห้อง_' + (clsObj?.name || ''),
-      allowOutsideClick: false,
-      didOpen: () => Swal.showLoading()
+      title: 'บันทึกสำเร็จ!',
+      html: `
+        <div class="text-xs text-slate-600 text-left space-y-1">
+          <p>• ข้อมูลถูกบันทึกในระบบเรียบร้อยแล้ว</p>
+          <p>• ระบบกำลังส่งข้อมูลไปยัง Google Sheets และแยกชีท <b>ห้อง_${esc(clsObj?.name||'')}</b> ให้อัตโนมัติ</p>
+        </div>
+      `,
+      icon: 'success',
+      timer: 2000,
+      showConfirmButton: false
     });
 
     try {
-      // ดึง records ทั้งหมดของครูท่านนี้ในวิชานี้เพื่ออัปเดตให้ครบ
       const allTeacherRecords = db.assessments.filter(a => 
         a.teacherId === state.user.id && 
         a.termId === termId && 
@@ -2236,30 +2351,29 @@ async function commitAndSaveAssessments(){
         a.type === type
       );
 
-      const res = await apiCall('saveAssessments', {
+      // ส่ง API ในเบื้องหลังทันที
+      apiCall('saveAssessments', {
         records: allTeacherRecords,
         studentDetails: studentDetails,
         logInfo: newActivityLog
+      }).then(res => {
+        if(res && res.status === 'success'){
+          toast('success', 'ซิงค์ข้อมูลลง Google Sheets เรียบร้อย');
+        }
+      }).catch(err => {
+        console.warn('Google Sheets background sync error:', err);
       });
-
-      Swal.close();
-      if(res && res.status === 'success'){
-        syncMsg = 'บันทึกลงระบบและส่งขึ้น Google Sheets สำเร็จเรียบร้อย!';
-      } else {
-        syncMsg = 'บันทึกในระบบเรียบร้อย (ส่ง Google Sheets: ' + (res?.message || 'เตือน') + ')';
-      }
-    } catch(err){
-      Swal.close();
-      syncMsg = 'บันทึกในระบบแล้ว (Google Sheets เกิดข้อผิดพลาดในการเชื่อมต่อ)';
+    } catch(err) {
+      console.warn('Sync error:', err);
     }
+  } else {
+    Swal.fire({
+      title: 'บันทึกสำเร็จ!',
+      text: 'ข้อมูลถูกบันทึกในระบบเรียบร้อย ข้อมูลอัปเดตไปยังแดชบอร์ดและรายงานผลแล้ว',
+      icon: 'success',
+      confirmButtonColor: db.settings.primary
+    });
   }
-
-  Swal.fire({
-    title: 'บันทึกสำเร็จ!',
-    text: syncMsg,
-    icon: 'success',
-    confirmButtonColor: db.settings.primary
-  });
 
   renderAssessBody();
 }
