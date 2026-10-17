@@ -378,14 +378,18 @@ async function fetchCloudData(silent = false){
     if (Array.isArray(d.terms) && d.terms.length) db.terms = d.terms;
     if (Array.isArray(d.subjectGroups) && d.subjectGroups.length) db.subjectGroups = d.subjectGroups;
     if (Array.isArray(d.subjects) && d.subjects.length) db.subjects = d.subjects;
-    if (Array.isArray(d.levels) && d.levels.length) db.levels = d.levels;
+    if (Array.isArray(d.levels) && d.levels.length) {
+      db.levels = d.levels;
+    } else if (!db.levels || db.levels.length === 0) {
+      db.levels = JSON.parse(JSON.stringify(DEFAULT_DB.levels));
+    }
     if (Array.isArray(d.classes) && d.classes.length) db.classes = d.classes;
     if (Array.isArray(d.students) && d.students.length) db.students = d.students;
     if (Array.isArray(d.assessments)) db.assessments = d.assessments;
     if (Array.isArray(d.activityLogs)) db.activityLogs = d.activityLogs;
     if (d.topics) {
-      if (d.topics.junior) db.topics.junior = d.topics.junior;
-      if (d.topics.senior) db.topics.senior = d.topics.senior;
+      if (d.topics.junior && d.topics.junior.length) db.topics.junior = d.topics.junior;
+      if (d.topics.senior && d.topics.senior.length) db.topics.senior = d.topics.senior;
     }
     if (d.settings) {
       ['logo','primary','secondary'].forEach(k => { if (d.settings[k]) db.settings[k] = d.settings[k]; });
@@ -613,6 +617,9 @@ function viewPublicDash(){
 function renderPublicDashData(){
   const termId = $('#pub-term')?.value;
   if(!termId) return;
+  if(!state.pubSelectedClasses || state.pubSelectedClasses.length === 0){
+    state.pubSelectedClasses = db.classes.map(c => c.id);
+  }
   setTimeout(() => {
     const data = computeDashboard(termId);
     const el = $('#pub-content');
@@ -887,6 +894,9 @@ let adminClassChart = null;
 function renderAdminDashData(){
   const termId = $('#admin-term')?.value;
   if(!termId) return;
+  if(!state.adminSelectedClasses || state.adminSelectedClasses.length === 0){
+    state.adminSelectedClasses = db.classes.map(c => c.id);
+  }
   setTimeout(() => {
     const data = computeDashboard(termId);
     const el = $('#admin-dash-content');
@@ -1769,6 +1779,9 @@ let teacherClassChart = null;
 function renderTeacherDash(){
   const termId = $('#t-term')?.value;
   if(!termId) return;
+  if(!state.teacherSelectedClasses || state.teacherSelectedClasses.length === 0){
+    state.teacherSelectedClasses = db.classes.map(c => c.id);
+  }
   setTimeout(() => {
     const data = computeDashboard(termId);
     const myAss = db.assessments.filter(a => a.teacherId === state.user.id && a.termId === termId);
@@ -2432,20 +2445,18 @@ async function commitAndSaveAssessments(){
   db.activityLogs.push(newActivityLog);
   saveDB(); // บันทึกข้อมูลขึ้นระบบทันที
 
-  // Auto-Sync ส่งขึ้น Google Sheets ในพื้นหลังทันที (ถ้ามี URL)
+  // Auto-Sync ส่งขึ้น Google Sheets ทันที (ถ้ามี URL)
   if(db.settings.gasUrl){
-    // แสดง toast หรือ SweetAlert2 บันทึกสำเร็จ
     Swal.fire({
-      title: 'บันทึกสำเร็จ!',
+      title: 'กำลังบันทึกลง Google Sheets...',
       html: `
         <div class="text-xs text-slate-600 text-left space-y-1">
-          <p>• ข้อมูลถูกบันทึกในระบบเรียบร้อยแล้ว</p>
-          <p>• ระบบกำลังส่งข้อมูลไปยัง Google Sheets และแยกชีท <b>ห้อง_${esc(clsObj?.name||'')}</b> ให้อัตโนมัติ</p>
+          <p>• กำลังบันทึกคะแนนและส่งข้อมูลไปยัง Google Sheets</p>
+          <p>• กำลังสร้าง/อัปเดตชีท <b>ห้อง_${esc(clsObj?.name||'')}</b> อัตโนมัติ...</p>
         </div>
       `,
-      icon: 'success',
-      timer: 2000,
-      showConfirmButton: false
+      allowOutsideClick: false,
+      didOpen: () => Swal.showLoading()
     });
 
     try {
@@ -2457,20 +2468,42 @@ async function commitAndSaveAssessments(){
         a.type === type
       );
 
-      // ส่ง API ในเบื้องหลังทันที
-      apiCall('saveAssessments', {
+      const res = await apiCall('saveAssessments', {
         records: allTeacherRecords,
         studentDetails: studentDetails,
         logInfo: newActivityLog
-      }).then(res => {
-        if(res && res.status === 'success'){
-          toast('success', 'ซิงค์ข้อมูลลง Google Sheets เรียบร้อย');
-        }
-      }).catch(err => {
-        console.warn('Google Sheets background sync error:', err);
       });
+
+      Swal.close();
+      if(res && res.status === 'success'){
+        Swal.fire({
+          title: 'บันทึกสำเร็จ!',
+          html: `
+            <div class="text-xs text-slate-600 text-left space-y-1">
+              <p class="text-emerald-700 font-bold">✓ บันทึกข้อมูลลง Google Sheets เรียบร้อย</p>
+              <p>• อัปเดตชีท <b>ห้อง_${esc(clsObj?.name||'')}</b> และ <b>Assessments</b> สำเร็จ</p>
+              <p>• จำนวนคะแนนที่บันทึก: <b>${res.count || allTeacherRecords.length}</b> รายการ</p>
+            </div>
+          `,
+          icon: 'success',
+          confirmButtonColor: db.settings.primary
+        });
+      }
     } catch(err) {
-      console.warn('Sync error:', err);
+      Swal.close();
+      console.error('Google Sheets sync error:', err);
+      Swal.fire({
+        title: 'บันทึกในเครื่องสำเร็จ แต่ส่งขึ้น Sheets ไม่สำเร็จ',
+        html: `
+          <div class="text-xs text-left space-y-1">
+            <p class="text-slate-700">• ข้อมูลถูกบันทึกในระบบของเครื่องแล้ว</p>
+            <p class="text-rose-600 font-bold">• ไม่สามารถเชื่อมต่อ Google Sheets: ${esc(err.message)}</p>
+            <p class="text-slate-500 mt-2">กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ตหรือ Web App URL</p>
+          </div>
+        `,
+        icon: 'warning',
+        confirmButtonColor: db.settings.primary
+      });
     }
   } else {
     Swal.fire({
