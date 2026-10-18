@@ -113,14 +113,9 @@ body{background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transpare
   </div>
 </header>
 
-<main id="app" class="max-w-7xl mx-auto px-3 sm:px-4 py-5 min-h-[60vh]"></main>
+<main id="app" class="max-w-7xl mx-auto px-3 sm:px-4 py-5 pb-10 min-h-[60vh]"></main>
 
-<footer class="mt-10 border-t border-slate-100 bg-white">
-  <div class="max-w-7xl mx-auto px-4 py-6 text-center text-xs text-slate-500">
-    <p class="font-semibold text-slate-600 mb-1">กลุ่มบริหารงานวิชาการโรงเรียนเสาไห้ "วิมลวิทยานุกูล"</p>
-    <p>© <span id="yr"></span> ระบบประเมินสมรรถนะสำคัญของผู้เรียน — ฐานข้อมูล Google Sheets · ไฟล์เก็บใน Google Drive</p>
-  </div>
-</footer>
+
 
 <script>
 /* =========================================================
@@ -2213,7 +2208,6 @@ function pageAccount(el){
    INIT
 ========================================================= */
 (async function init(){
-  $('#yr').textContent=new Date().getFullYear()+543;
   applyTheme(); renderAuth(); renderNav();
   if(!API_URL||API_URL.includes('PASTE_YOUR')){
     $('#app').innerHTML=`<div class="card p-6 max-w-xl mx-auto text-center">
