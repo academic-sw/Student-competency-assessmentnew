@@ -466,7 +466,7 @@ async function flushSync(){
     console.error('sync error:',err);
     if(!window.__errShown){
       window.__errShown=true;
-      alertErr('บันทึกลง Google Sheets ไม่สำเร็จ',err.message);
+      alertErr('บันทึกข้อมูลไม่สำเร็จ',err.message);
       setTimeout(()=>{window.__errShown=false;},30000);
     }
     ACT_QUEUE.unshift(...acts); reps.forEach(x=>REPORT_AIDS.add(x));
@@ -484,7 +484,7 @@ function setSyncState(s,msg){
   const b=$('#syncBox'); if(!b) return;
   if(!SESSION){ b.innerHTML=''; return; }
   const m={
-    ok:['bg-emerald-50 text-emerald-700','fa-cloud-arrow-up','บันทึกลง Google Sheets แล้ว'],
+    ok:['bg-emerald-50 text-emerald-700','fa-cloud-arrow-up','บันทึกลงฐานข้อมูลแล้ว'],
     dirty:['bg-amber-50 text-amber-700','fa-pen','รอการบันทึก'],
     saving:['bg-sky-50 text-sky-700','fa-circle-notch spin','กำลังบันทึก'],
     error:['bg-rose-50 text-rose-700','fa-triangle-exclamation','บันทึกไม่สำเร็จ (กำลังลองใหม่)']
@@ -496,7 +496,7 @@ window.addEventListener('beforeunload',e=>{
 });
 
 async function loadAll(){
-  showLoader('กำลังโหลดข้อมูลจาก Google Sheets...');
+  showLoader('กำลังโหลดข้อมูล');
   try{
     const res=await api('load');
     const base=emptyDB();
@@ -836,7 +836,7 @@ function landingHTML(){
     <div class="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-2xl mb-3" style="background:var(--primary-s);color:var(--primary-d)"><i class="fa-solid fa-clipboard-check"></i></div>
     <h2 class="text-xl font-extrabold text-slate-800">ระบบประเมินสมรรถนะสำคัญของผู้เรียน</h2>
     <p class="text-sm text-slate-500 mt-1">โรงเรียนเสาไห้ "วิมลวิทยานุกูล"</p>
-    <p class="text-sm text-slate-600 mt-4 leading-relaxed">เข้าสู่ระบบเพื่อประเมินสมรรถนะและดูแดชบอร์ดสรุปผล<br>ข้อมูลทั้งหมดบันทึกใน Google Sheets ของโรงเรียน</p>
+    <p class="text-sm text-slate-600 mt-4 leading-relaxed">เข้าสู่ระบบเพื่อประเมินสมรรถนะและดูแดชบอร์ดสรุปผล<br>ข้อมูลทั้งหมดบันทึกในฐานข้อมูลของโรงเรียน</p>
     <button class="btn btn-primary mt-5 !px-6 !py-2.5 !text-sm" id="landLogin"><i class="fa-solid fa-lock"></i> เข้าสู่ระบบ</button>
   </div>`;
 }
@@ -1013,7 +1013,7 @@ function pageUsers(el){
     <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
       <div>
         <h2 class="text-lg font-bold text-slate-800">จัดการผู้ใช้งาน</h2>
-        <p class="text-xs text-slate-500">ผู้ดูแลระบบ และ ครูผู้ประเมิน (รหัสผ่านถูกเข้ารหัสเก็บใน Google Sheets)</p>
+        <p class="text-xs text-slate-500">ผู้ดูแลระบบ และ ครูผู้ประเมิน (รหัสผ่านถูกเข้ารหัสเก็บในฐานข้อมูล)</p>
       </div>
       <button class="btn btn-primary" id="addUser"><i class="fa-solid fa-plus"></i> เพิ่มผู้ใช้งาน</button>
     </div>
@@ -1792,8 +1792,8 @@ function pageSettings(el){
     </div>
 
     <div class="card p-5">
-      <h3 class="font-bold text-sm text-slate-700 mb-3"><i class="fa-brands fa-google-drive mr-1" style="color:var(--primary)"></i> การเชื่อมต่อ Google Sheets / Drive</h3>
-      <p class="text-xs text-slate-500 mb-3 leading-relaxed">ข้อมูลทุกอย่างถูกบันทึกใน Google Sheets แยกเป็นชีตตามหมวด (ผู้ใช้ ภาคเรียน รายวิชา ห้องเรียน นักเรียน การมอบหมาย หัวข้อประเมิน คะแนน ฯลฯ) และมีชีตรายงานแยกรายห้อง (ห้อง ม.1-1 …) รายชั้น (ชั้น ม.1 …) และสรุปผลรวม</p>
+      <h3 class="font-bold text-sm text-slate-700 mb-3"><i class="fa-brands fa-google-drive mr-1" style="color:var(--primary)"></i> การเชื่อมต่อฐานข้อมูล / Drive</h3>
+      <p class="text-xs text-slate-500 mb-3 leading-relaxed">ข้อมูลทุกอย่างถูกบันทึกในฐานข้อมูล แยกเป็นชีตตามหมวด (ผู้ใช้ ภาคเรียน รายวิชา ห้องเรียน นักเรียน การมอบหมาย หัวข้อประเมิน คะแนน ฯลฯ) และมีชีตรายงานแยกรายห้อง (ห้อง ม.1-1 …) รายชั้น (ชั้น ม.1 …) และสรุปผลรวม</p>
       <div class="flex flex-wrap gap-2">
         ${META.sheetUrl?`<a class="btn btn-outline btn-sm" href="${esc(META.sheetUrl)}" target="_blank" rel="noopener"><i class="fa-solid fa-table"></i> เปิด Google Sheet</a>`:''}
         ${META.folderUrl?`<a class="btn btn-outline btn-sm" href="${esc(META.folderUrl)}" target="_blank" rel="noopener"><i class="fa-solid fa-folder-open"></i> เปิดโฟลเดอร์ Google Drive</a>`:''}
@@ -2141,13 +2141,13 @@ function bindEval(assign){
   const saveBtn=$('#btnSaveEval');
   if(saveBtn) saveBtn.onclick=async()=>{
     const old=saveBtn.innerHTML;
-    saveBtn.innerHTML='<i class="fa-solid fa-circle-notch spin"></i> กำลังบันทึกลง Google Sheets';
+    saveBtn.innerHTML='<i class="fa-solid fa-circle-notch spin"></i> กำลังบันทึกลงฐานข้อมูล';
     saveBtn.disabled=true;
     logAct('บันทึกผลการประเมิน '+(DB.subjects.find(s=>s.id===assign.subjectId)?.name||'')+' '+(cls?.name||''));
     REPORT_AIDS.add(assign.id);
     const ok=await syncNow();
     saveBtn.innerHTML=old; saveBtn.disabled=false;
-    if(ok) alertOk('บันทึกการประเมินสำเร็จ','ข้อมูลถูกบันทึกลง Google Sheets และอัปเดตรายงานรายห้องแล้ว');
+    if(ok) alertOk('บันทึกการประเมินสำเร็จ','ข้อมูลถูกบันทึกลงฐานข้อมูลและอัปเดตรายงานรายห้องแล้ว');
     else alertErr('บันทึกไม่สำเร็จ',LAST_ERR||'กรุณาลองใหม่อีกครั้ง');
   };
 }
@@ -2212,7 +2212,7 @@ function pageAccount(el){
   if(!API_URL||API_URL.includes('PASTE_YOUR')){
     $('#app').innerHTML=`<div class="card p-6 max-w-xl mx-auto text-center">
       <i class="fa-solid fa-plug-circle-exclamation text-3xl text-amber-500 mb-2"></i>
-      <h2 class="font-bold text-slate-800">ยังไม่ได้ตั้งค่าการเชื่อมต่อ Google Sheets</h2>
+      <h2 class="font-bold text-slate-800">ยังไม่ได้ตั้งค่าการเชื่อมต่อฐานข้อมูล</h2>
       <p class="text-sm text-slate-500 mt-2">เปิดไฟล์ <b>index.html</b> แล้วแก้ค่า <code>API_URL</code> ให้เป็น URL ของ Web App (Apps Script) ที่ลงท้ายด้วย <code>/exec</code></p></div>`;
     return;
   }
