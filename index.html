@@ -49,8 +49,6 @@ body{background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transpare
 .s1{background:#fef3c7;color:#92400e;border-color:#fcd34d}
 .s0{background:#ffe4e6;color:#9f1239;border-color:#fda4af}
 .sn{background:#f8fafc;color:#94a3b8;border-color:#e2e8f0}
-.score-sel{width:62px;height:38px;text-align:center;border-radius:.55rem;border:1px solid #e2e8f0;font-size:1rem;font-weight:800;cursor:pointer;outline:none}
-.score-sel:focus{box-shadow:0 0 0 3px var(--primary-s)}
 .nav-btn{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .8rem;border-radius:.7rem;font-size:.82rem;font-weight:600;color:#475569;white-space:nowrap;cursor:pointer;transition:.15s}
 .nav-btn:hover{background:var(--primary-s);color:var(--primary-d)}
 .nav-btn.active{background:var(--primary);color:#fff;box-shadow:0 4px 12px rgba(22,163,74,.25)}
@@ -74,9 +72,6 @@ body{background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transpare
 .evt th{position:sticky;background:#f8fafc;white-space:normal;vertical-align:top;padding:.55rem .6rem;border-bottom:1px solid #e2e8f0;border-right:1px solid #eef2f0;color:#0f172a;z-index:10;font-size:.8rem}
 .evt th.evf{z-index:14;vertical-align:middle;font-weight:800;color:#0f172a;font-size:.82rem}
 .evt th.evg{text-align:center;font-size:.84rem;font-weight:800;line-height:1.4;padding:.6rem .7rem;border-bottom:1px solid rgba(15,23,42,.1)}
-.evt th.evl{min-width:150px;max-width:200px;text-align:left;background:#fff}
-.evcode{display:inline-block;background:var(--primary);color:#fff;font-weight:800;font-size:.8rem;padding:.1rem .5rem;border-radius:.45rem}
-.evtxt{margin-top:.3rem;font-size:.82rem;line-height:1.4;font-weight:600;color:#0f172a}
 .evt td{padding:.45rem .55rem;border-bottom:1px solid #f1f5f9;border-right:1px solid #f8fafc;vertical-align:middle;background:#fff}
 .evt td.stk{position:sticky;z-index:6}
 .evt tbody tr:hover td{background:#f4fbf6}
@@ -85,33 +80,44 @@ body{background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transpare
 .lg-i.ok{background:#ecfdf5}
 .lg-i .evcode{flex-shrink:0;margin-top:.05rem}
 .sync-pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:999px}
-/* เพิ่มหรือแก้ไขในส่วน CSS */
-.evt th.evf{ z-index: 14; vertical-align: middle; font-weight: 800; color: #0f172a; font-size: .82rem; background: #f8fafc; border-right: 1px solid #e2e8f0; }
-.evt td.stk{ position: sticky; z-index: 6; background: #fff; border-right: 1px solid #e2e8f0; }
-.score-sel{ width:54px; height:34px; text-align:center; border-radius:.4rem; border:1px solid #e2e8f0; font-size:.95rem; font-weight:800; cursor:pointer; outline:none; }
-.scrollbar-x { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-/* ปรับแต่งตารางประเมิน */
-.table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+/* ========================================================
+   ปรับแต่งตารางประเมิน (แก้ไขให้เห็นหัวข้อ 5-6 ข้อ)
+   ======================================================== */
+.table-responsive { width: 100%; overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+.table-responsive::-webkit-scrollbar { height: 8px; width: 8px; }
+.table-responsive::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+
 .evt { border-collapse: separate; border-spacing: 0; font-size: .8rem; width: max-content; min-width: 100%; }
-.evt th, .evt td { padding: 0.35rem 0.25rem; }
+.evt th, .evt td { padding: 0.35rem 0.2rem; }
 .evt th.evf { position: sticky; z-index: 14; background: #f8fafc; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; font-size: 0.75rem; }
 .evt td.stk { position: sticky; z-index: 6; background: #fff; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
 
-/* ความกว้างคอลัมน์บนคอมพิวเตอร์ */
+/* คอลัมน์หัวข้อประเมิน */
+.evt th.evl { min-width: 50px; max-width: 60px; width: 50px; text-align: left; background: #fff; vertical-align: top; padding: 0.3rem 0.1rem !important; }
+.evt th.evl .evtxt { font-size: .65rem; line-height: 1.2; margin-top: 0.2rem; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.evcode { display: inline-block; background: var(--primary); color: #fff; font-weight: 800; font-size: .7rem; padding: .1rem .2rem; border-radius: .3rem; }
+
+/* ความกว้างคอลัมน์บนคอมพิวเตอร์ (Fixed Columns) */
 .col-chk { left: 0; width: 34px; min-width: 34px; }
 .col-no { left: 34px; width: 40px; min-width: 40px; }
-.col-name { left: 74px; width: 150px; min-width: 150px; }
-.col-sum { left: 224px; width: 80px; min-width: 80px; }
-.col-set { left: 304px; width: 95px; min-width: 95px; }
+.col-name { left: 74px; width: 130px; min-width: 130px; max-width: 130px; }
+.col-sum { left: 204px; width: 75px; min-width: 75px; }
+.col-set { left: 279px; width: 90px; min-width: 90px; }
 
 /* ปรับแต่งสำหรับมือถือ/ไอแพด (หน้าจอ <= 1024px) */
 @media (max-width: 1024px) {
-  .col-name { width: 100px; min-width: 100px; }
-  .col-sum, .col-set { display: none !important; } /* ซ่อนคอลัมน์สรุปและตั้งค่าเพื่อให้เห็นคะแนนกว้างขึ้น */
-  .score-sel { width: 44px !important; height: 30px !important; padding: 0 !important; text-align: center; font-size: 0.85rem !important; }
-  .col-chk { width: 28px !important; min-width: 28px !important; }
-  .col-no { left: 28px !important; width: 32px !important; min-width: 32px !important; }
-  .col-name { left: 60px !important; }
+  .col-name { width: 80px; min-width: 80px; max-width: 80px; }
+  .col-sum, .col-set { display: none !important; }
+  .col-chk { width: 24px !important; min-width: 24px !important; }
+  .col-no { left: 24px !important; width: 28px !important; min-width: 28px !important; }
+  .col-name { left: 52px !important; }
+  
+  .score-sel { width: 32px !important; height: 26px !important; padding: 0 !important; text-align: center; font-size: 0.75rem !important; border-radius: 0.3rem; }
+  
+  .evt th.evl { min-width: 40px; max-width: 45px; width: 40px; padding: 0.2rem 0.05rem !important; }
+  .evt th.evl .evtxt { font-size: 0.55rem; -webkit-line-clamp: 5; }
+  .evt th.evl .evcode { font-size: 0.55rem !important; padding: 0.05rem 0.1rem !important; }
 }
 </style>
 </head>
@@ -142,7 +148,6 @@ body{background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transpare
 </header>
 
 <main id="app" class="max-w-7xl mx-auto px-3 sm:px-4 py-5 pb-10 min-h-[60vh]"></main>
-
 
 
 <script>
@@ -1307,11 +1312,11 @@ function subjectForm(s){
 function pageClasses(el){
   const semId=DASH.semId||currentSem()?.id;
   const q=(App.params.sq||'').toLowerCase();
-  const lv=(App.params.slv||'');
+  const selectedLevel = String(App.params.slv || ''); // แก้ไขจาก lv เป็น selectedLevel
   const size=App.params.ssize||10;
   let found=DB.students.filter(s=>{
     const c=classOf(s.classId);
-    if(lv && (!c||c.level!==lv)) return false;
+    if(selectedLevel && (!c||c.level!==selectedLevel)) return false;
     if(q && !s.name.toLowerCase().includes(q)) return false;
     return true;
   }).sort((a,b)=>(a.name||'').localeCompare(b.name||'','th'));
@@ -1347,7 +1352,7 @@ function pageClasses(el){
       <h3 class="font-bold text-sm text-slate-700 mb-3"><i class="fa-solid fa-magnifying-glass mr-1" style="color:var(--primary)"></i> ค้นหารายชื่อนักเรียน</h3>
       <div class="grid grid-cols-1 sm:grid-cols-4 gap-2 mb-3">
         <div><label class="lbl">ระดับชั้น</label>
-          <select id="sLv" class="inp"><option value="">ทุกระดับชั้น</option>${LEVELS.map(l=>`<option value="${l}" ${lv===l?'selected':''}>${l}</option>`).join('')}</select></div>
+          <select id="sLv" class="inp"><option value="">ทุกระดับชั้น</option>${LEVELS.map(l=>`<option value="${l}" ${selectedLevel===l?'selected':''}>${l}</option>`).join('')}</select></div>
         <div class="sm:col-span-2"><label class="lbl">ชื่อ-นามสกุล</label>
           <input id="sName" class="inp" placeholder="ค้นหาชื่อนักเรียน..." value="${esc(App.params.sq||'')}"></div>
         <div><label class="lbl">แสดงผล</label>
@@ -1985,9 +1990,9 @@ function evalMatrixHTML(assign){
     hdrRows.push(cells);
   }
   
-  hdrRows.push(L.map(l=>`<th class="evl" style="min-width:65px;padding:0.3rem 0.2rem" title="${esc(l.node.name)}"><span class="evcode" style="font-size:.7rem;padding:0.1rem 0.3rem">${fullCode(rootNo,l.code)}</span><div class="evtxt" style="font-size:.75rem;margin-top:0.2rem;line-height:1.2">${esc(l.node.name)}</div></th>`).join(''));
+  // ลบ Inline style ที่กำหนด min-width ออกเพื่อให้ CSS ทำงาน
+  hdrRows.push(L.map(l=>`<th class="evl" title="${esc(l.node.name)}"><span class="evcode">${fullCode(rootNo,l.code)}</span><div class="evtxt">${esc(l.node.name)}</div></th>`).join(''));
 
-  // ใช้คลาส CSS แทน inline style เพื่อให้ Responsive
   const fixedTh=`
     <th rowspan="${R}" class="evf col-chk" style="padding:0.2rem"></th>
     <th rowspan="${R}" class="evf col-no" style="padding:0.2rem;text-align:center">เลขที่</th>
@@ -2013,7 +2018,7 @@ function evalMatrixHTML(assign){
       </td>
       ${leaves.map(l=>{
         const v=getScore(assign.id,st.id,l.node.id);
-        return `<td class="text-center" style="min-width:55px; padding:0.25rem"><select class="score-sel ${v===null?'sn':'s'+v}" data-a="${assign.id}" data-s="${st.id}" data-t="${l.node.id}" aria-label="${esc(fullCode(rootNo,l.code))}">
+        return `<td class="text-center" style="padding:0.25rem"><select class="score-sel ${v===null?'sn':'s'+v}" data-a="${assign.id}" data-s="${st.id}" data-t="${l.node.id}" aria-label="${esc(fullCode(rootNo,l.code))}">
           <option value="" ${v===null?'selected':''}>–</option>
           ${[3,2,1,0].map(x=>`<option value="${x}" ${v===x?'selected':''}>${x}</option>`).join('')}
         </select></td>`;
@@ -2060,7 +2065,6 @@ function evalMatrixHTML(assign){
         </div>
 
         <div class="card p-3">
-          <!-- เปลี่ยนมาใช้ table-responsive เพื่อรองรับการปัดจอซ้าย-ขวาบนมือถือ -->
           <div class="table-responsive" style="max-height:78vh;">
             <table class="evt" id="evTable">
               <thead>${thead}</thead>
