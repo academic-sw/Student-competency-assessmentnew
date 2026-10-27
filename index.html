@@ -90,7 +90,29 @@ body{background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transpare
 .evt td.stk{ position: sticky; z-index: 6; background: #fff; border-right: 1px solid #e2e8f0; }
 .score-sel{ width:54px; height:34px; text-align:center; border-radius:.4rem; border:1px solid #e2e8f0; font-size:.95rem; font-weight:800; cursor:pointer; outline:none; }
 .scrollbar-x { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* ปรับแต่งตารางประเมิน */
+.table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.evt { border-collapse: separate; border-spacing: 0; font-size: .8rem; width: max-content; min-width: 100%; }
+.evt th, .evt td { padding: 0.35rem 0.25rem; }
+.evt th.evf { position: sticky; z-index: 14; background: #f8fafc; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; font-size: 0.75rem; }
+.evt td.stk { position: sticky; z-index: 6; background: #fff; border-right: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; }
 
+/* ความกว้างคอลัมน์บนคอมพิวเตอร์ */
+.col-chk { left: 0; width: 34px; min-width: 34px; }
+.col-no { left: 34px; width: 40px; min-width: 40px; }
+.col-name { left: 74px; width: 150px; min-width: 150px; }
+.col-sum { left: 224px; width: 80px; min-width: 80px; }
+.col-set { left: 304px; width: 95px; min-width: 95px; }
+
+/* ปรับแต่งสำหรับมือถือ/ไอแพด (หน้าจอ <= 1024px) */
+@media (max-width: 1024px) {
+  .col-name { width: 100px; min-width: 100px; }
+  .col-sum, .col-set { display: none !important; } /* ซ่อนคอลัมน์สรุปและตั้งค่าเพื่อให้เห็นคะแนนกว้างขึ้น */
+  .score-sel { width: 44px !important; height: 30px !important; padding: 0 !important; text-align: center; font-size: 0.85rem !important; }
+  .col-chk { width: 28px !important; min-width: 28px !important; }
+  .col-no { left: 28px !important; width: 32px !important; min-width: 32px !important; }
+  .col-name { left: 60px !important; }
+}
 </style>
 </head>
 <body>
@@ -902,7 +924,7 @@ function pageDashboard(el){
       <div style="height:280px"><canvas id="chartClass"></canvas></div>
     </div>
 
-    ${isAdmin?activityPanelHTML():''}
+   
   </div>`;
 
   $('#dashSem').onchange=e=>{ DASH.semId=e.target.value; DASH.classSel=[]; go('home'); };
@@ -913,7 +935,7 @@ function pageDashboard(el){
   });
   $('#selAllCls')&&($('#selAllCls').onclick=()=>{DASH.classSel=DB.classes.map(c=>c.id);go('home');});
   $('#clrCls')&&($('#clrCls').onclick=()=>{DASH.classSel=[];go('home');});
-  if(isAdmin) bindActivity();
+  
 
   drawDashboardCharts(st);
 }
@@ -1283,17 +1305,7 @@ function subjectForm(s){
    ADMIN : CLASSES & STUDENTS
 ========================================================= */
 function pageClasses(el){
-  const semId=DASH.semId||currentSem()?.id;
-  const q=(App.params.sq||'').toLowerCase();
-  const lv=(App.params.slv||'');
-  const size=App.params.ssize||10;
-  let found=DB.students.filter(s=>{
-    const c=classOf(s.classId);
-    if(lv && (!c||c.level!==lv)) return false;
-    if(q && !s.name.toLowerCase().includes(q)) return false;
-    return true;
-  }).sort((a,b)=>(a.name||'').localeCompare(b.name||'','th'));
-  const info=slicePage(found,'stuSearch',size==='all'?Math.max(1,found.length):size);
+  
 
   el.innerHTML=`<div class="fade-in space-y-5">
     <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
@@ -1371,16 +1383,7 @@ function pageClasses(el){
       logAct('ลบชั้นเรียน '+c.name); saveDB(); go('classes'); toast('success','ลบแล้ว');
     }
   });
-  $('#sLv').onchange=e=>go('classes',{...App.params,slv:e.target.value});
-  $('#sSize').onchange=e=>go('classes',{...App.params,ssize:e.target.value==='all'?'all':Number(e.target.value)});
-  $('#sName').oninput=e=>{
-    clearTimeout(window.__sn);
-    window.__sn=setTimeout(()=>{
-      const v=e.target.value;
-      App.params.sq=v; go('classes',{...App.params,sq:v});
-      setTimeout(()=>{const i=$('#sName'); if(i){i.focus(); i.setSelectionRange(i.value.length,i.value.length);}},250);
-    },450);
-  };
+  
 }
 function classForm(c){
   const isEdit=!!c;
@@ -1931,10 +1934,8 @@ function evalMatrixHTML(assign){
   const sub=DB.subjects.find(s=>s.id===assign.subjectId);
   const leaves=L.map(x=>({node:x.node,code:x.code}));
 
-  /* ---- ชิปเลือกด้านที่ประเมิน ---- */
   const chips=tops.map((t,i)=>`<button class="chip-top ${t.id===top.id?'on':''}" data-top="${t.id}"><span>${esc(t.name)}</span></button>`).join('');
 
-  /* ---- รายการหัวข้อ (legend) จัดกลุ่มตามหัวข้อย่อย ---- */
   let lastAnc=[], legend='';
   L.forEach(l=>{
     l.anc.forEach((a,k)=>{
@@ -1949,7 +1950,6 @@ function evalMatrixHTML(assign){
     </div>`;
   });
 
-  /* ---- หัวตารางหลายชั้น ---- */
   const maxA=Math.max(0,...L.map(l=>l.anc.length));
   const R=maxA+1;
   const hdrRows=[];
@@ -1966,37 +1966,35 @@ function evalMatrixHTML(assign){
     hdrRows.push(cells);
   }
   
-  // ปรับขนาดความกว้างของหัวข้อแบบประเมินให้กว้างขึ้น (min-width: 65px)
   hdrRows.push(L.map(l=>`<th class="evl" style="min-width:65px;padding:0.3rem 0.2rem" title="${esc(l.node.name)}"><span class="evcode" style="font-size:.7rem;padding:0.1rem 0.3rem">${fullCode(rootNo,l.code)}</span><div class="evtxt" style="font-size:.75rem;margin-top:0.2rem;line-height:1.2">${esc(l.node.name)}</div></th>`).join(''));
 
-  // ปรับขนาดคอลัมน์ปักหมุด (Sticky) ให้เล็กลง
+  // ใช้คลาส CSS แทน inline style เพื่อให้ Responsive
   const fixedTh=`
-    <th rowspan="${R}" class="evf" style="left:0;min-width:32px;width:32px;padding:0.2rem"></th>
-    <th rowspan="${R}" class="evf" style="left:32px;min-width:40px;width:40px;text-align:center;padding:0.2rem">เลขที่</th>
-    <th rowspan="${R}" class="evf" style="left:72px;min-width:130px;width:130px;max-width:130px;padding:0.2rem">ชื่อ-นามสกุล</th>
-    <th rowspan="${R}" class="evf" style="min-width:80px;text-align:center;padding:0.2rem">สรุป</th>
-    <th rowspan="${R}" class="evf" style="min-width:110px;padding:0.2rem">ตั้งค่า</th>`;
+    <th rowspan="${R}" class="evf col-chk" style="padding:0.2rem"></th>
+    <th rowspan="${R}" class="evf col-no" style="padding:0.2rem;text-align:center">เลขที่</th>
+    <th rowspan="${R}" class="evf col-name" style="padding:0.2rem">ชื่อ-นามสกุล</th>
+    <th rowspan="${R}" class="evf col-sum" style="padding:0.2rem;text-align:center">สรุป</th>
+    <th rowspan="${R}" class="evf col-set" style="padding:0.2rem">ตั้งค่า</th>`;
     
   const thead=hdrRows.map((c,i)=>`<tr>${i===0?fixedTh:''}${c}</tr>`).join('');
 
-  // ปรับขนาดเซลล์ในแถวให้กะทัดรัด และเว้นที่ให้ช่องประเมินกว้างขึ้น
   const rows=sts.map(st=>{
     return `<tr data-row="${st.id}">
-      <td class="stk" style="left:0;padding:0.2rem"><div class="flex justify-center"><input type="checkbox" class="w-4 h-4 accent-green-600 ev-chk" data-sid="${st.id}" ${EV.checks.has(st.id)?'checked':''}></div></td>
-      <td class="stk text-center font-semibold text-slate-600" style="left:32px;padding:0.2rem">${st.no||'-'}</td>
-      <td class="stk" style="left:72px;padding:0.2rem 0.4rem">
+      <td class="stk col-chk" style="padding:0.2rem"><div class="flex justify-center"><input type="checkbox" class="w-4 h-4 accent-green-600 ev-chk" data-sid="${st.id}" ${EV.checks.has(st.id)?'checked':''}></div></td>
+      <td class="stk col-no text-center font-semibold text-slate-600" style="padding:0.2rem">${st.no||'-'}</td>
+      <td class="stk col-name" style="padding:0.2rem 0.4rem">
         <p class="font-bold text-[13px] leading-tight text-slate-800 break-words" style="word-break:break-word">${esc(st.name)}</p>
         <p data-sub="${st.id}" class="${subLineClass(assign,leaves,st.id)}" style="font-size:10px;line-height:1.2">${subLineHTML(assign,leaves,st.id)}</p>
       </td>
-      <td class="text-center" data-summary="${st.id}" style="padding:0.2rem">${summaryHTML(assign,top,st.id)}</td>
-      <td class="whitespace-nowrap" style="padding:0.2rem">
-        <div class="flex gap-1 justify-center">
-          ${[3,2,1,0].map(v=>`<button class="btn btn-xs !px-1.5 !py-1 s${v}" data-rowset="${st.id}" data-v="${v}" title="ตั้งค่าทั้งแถว = ${v}" style="font-size:11px">${v}</button>`).join('')}
+      <td class="col-sum text-center" data-summary="${st.id}" style="padding:0.2rem">${summaryHTML(assign,top,st.id)}</td>
+      <td class="col-set whitespace-nowrap" style="padding:0.2rem">
+        <div class="grid grid-cols-2 gap-1 justify-center">
+          ${[3,2,1,0].map(v=>`<button class="btn btn-xs !px-1 !py-1 s${v}" data-rowset="${st.id}" data-v="${v}" title="ตั้งค่าทั้งแถว = ${v}" style="font-size:10px">${v}</button>`).join('')}
         </div>
       </td>
       ${leaves.map(l=>{
         const v=getScore(assign.id,st.id,l.node.id);
-        return `<td class="text-center" style="padding:0.2rem; min-width:65px"><select class="score-sel ${v===null?'sn':'s'+v}" data-a="${assign.id}" data-s="${st.id}" data-t="${l.node.id}" aria-label="${esc(fullCode(rootNo,l.code))}">
+        return `<td class="text-center" style="min-width:55px; padding:0.25rem"><select class="score-sel ${v===null?'sn':'s'+v}" data-a="${assign.id}" data-s="${st.id}" data-t="${l.node.id}" aria-label="${esc(fullCode(rootNo,l.code))}">
           <option value="" ${v===null?'selected':''}>–</option>
           ${[3,2,1,0].map(x=>`<option value="${x}" ${v===x?'selected':''}>${x}</option>`).join('')}
         </select></td>`;
@@ -2043,9 +2041,9 @@ function evalMatrixHTML(assign){
         </div>
 
         <div class="card p-3">
-          <!-- เพิ่ม overflow-x-auto และการเลื่อนแบบ smooth touch สำหรับมือถือ/ไอแพด -->
-          <div class="scrollbar-x" style="max-height:78vh;">
-            <table class="evt" id="evTable" style="width: max-content; min-width: 100%;">
+          <!-- เปลี่ยนมาใช้ table-responsive เพื่อรองรับการปัดจอซ้าย-ขวาบนมือถือ -->
+          <div class="table-responsive" style="max-height:78vh;">
+            <table class="evt" id="evTable">
               <thead>${thead}</thead>
               <tbody>${rows||`<tr><td colspan="${5+leaves.length}" class="text-center text-slate-400 py-8">ยังไม่มีนักเรียนในชั้นนี้</td></tr>`}</tbody>
             </table>
