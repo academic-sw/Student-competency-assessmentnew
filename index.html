@@ -1305,7 +1305,17 @@ function subjectForm(s){
    ADMIN : CLASSES & STUDENTS
 ========================================================= */
 function pageClasses(el){
-  
+  const semId=DASH.semId||currentSem()?.id;
+  const q=(App.params.sq||'').toLowerCase();
+  const lv=(App.params.slv||'');
+  const size=App.params.ssize||10;
+  let found=DB.students.filter(s=>{
+    const c=classOf(s.classId);
+    if(lv && (!c||c.level!==lv)) return false;
+    if(q && !s.name.toLowerCase().includes(q)) return false;
+    return true;
+  }).sort((a,b)=>(a.name||'').localeCompare(b.name||'','th'));
+  const info=slicePage(found,'stuSearch',size==='all'?Math.max(1,found.length):size);
 
   el.innerHTML=`<div class="fade-in space-y-5">
     <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
@@ -1383,7 +1393,16 @@ function pageClasses(el){
       logAct('ลบชั้นเรียน '+c.name); saveDB(); go('classes'); toast('success','ลบแล้ว');
     }
   });
-  
+  $('#sLv').onchange=e=>go('classes',{...App.params,slv:e.target.value});
+  $('#sSize').onchange=e=>go('classes',{...App.params,ssize:e.target.value==='all'?'all':Number(e.target.value)});
+  $('#sName').oninput=e=>{
+    clearTimeout(window.__sn);
+    window.__sn=setTimeout(()=>{
+      const v=e.target.value;
+      App.params.sq=v; go('classes',{...App.params,sq:v});
+      setTimeout(()=>{const i=$('#sName'); if(i){i.focus(); i.setSelectionRange(i.value.length,i.value.length);}},250);
+    },450);
+  };
 }
 function classForm(c){
   const isEdit=!!c;
