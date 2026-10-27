@@ -85,38 +85,12 @@ body{background:var(--bg);color:var(--ink);-webkit-tap-highlight-color:transpare
 .lg-i.ok{background:#ecfdf5}
 .lg-i .evcode{flex-shrink:0;margin-top:.05rem}
 .sync-pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:999px}
-/* ===== ตารางประเมิน: มุมมองกว้าง (มือถือ/ไอแพด) ===== */
-.evt th.evf-name{left:0;z-index:14;min-width:128px;max-width:128px;text-align:left;box-shadow:2px 0 4px rgba(15,23,42,.08)}
-.evt td.stk-name{position:sticky;left:0;z-index:6;background:#fff;min-width:128px;max-width:128px;box-shadow:2px 0 4px rgba(15,23,42,.08)}
-.evt tbody tr:hover td.stk-name{background:#f4fbf6}
-.evt td{padding:.3rem .25rem}
-.evt th.evl{min-width:96px;max-width:120px;padding:.4rem .35rem}
-.evt .evtxt{font-size:.68rem;line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.evt th.evg{font-size:.7rem;line-height:1.25;padding:.3rem .35rem}
-.evg-in{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.score-sel{width:54px;height:40px}
-.nm-wrap{display:flex;flex-direction:column;gap:.15rem}
-.nm-top{display:flex;align-items:center;gap:.35rem}
-.nm-no{font-weight:700;font-size:.75rem;color:#475569}
-.nm-name{font-weight:700;font-size:.78rem;line-height:1.2;color:#1e293b;word-break:break-word}
-.nm-sub{font-size:0!important;line-height:1}      /* มือถือ: แสดงเฉพาะไอคอน */
-.nm-sub i{font-size:.8rem}
+/* เพิ่มหรือแก้ไขในส่วน CSS */
+.evt th.evf{ z-index: 14; vertical-align: middle; font-weight: 800; color: #0f172a; font-size: .82rem; background: #f8fafc; border-right: 1px solid #e2e8f0; }
+.evt td.stk{ position: sticky; z-index: 6; background: #fff; border-right: 1px solid #e2e8f0; }
+.score-sel{ width:54px; height:34px; text-align:center; border-radius:.4rem; border:1px solid #e2e8f0; font-size:.95rem; font-weight:800; cursor:pointer; outline:none; }
+.scrollbar-x { overflow-x: auto; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-@media (min-width:1024px){
-  .evt th.evf-name,.evt td.stk-name{min-width:250px;max-width:250px}
-  .evt td{padding:.45rem .55rem}
-  .evt th.evl{min-width:150px;max-width:200px;padding:.55rem .6rem}
-  .evt .evtxt{font-size:.82rem;-webkit-line-clamp:unset;display:block;overflow:visible}
-  .evt th.evg{font-size:.84rem;padding:.6rem .7rem}
-  .evg-in{display:block;overflow:visible}
-  .score-sel{width:62px;height:38px}
-  .nm-name{font-size:.9rem}
-  .nm-sub{font-size:11px!important}
-}
-
-/* โหมดเต็มจอ */
-#evWrap.evfs{position:fixed;inset:0;z-index:70;border-radius:0;padding:.5rem;display:flex;flex-direction:column;background:#fff}
-#evWrap.evfs .evscroll{flex:1;max-height:none!important}
 </style>
 </head>
 <body>
@@ -1876,7 +1850,7 @@ function pageSettings(el){
 /* =========================================================
    TEACHER : EVALUATION
 ========================================================= */
-const EV={semId:null,assignId:'',topId:'',checks:new Set(),fs:false};
+const EV={semId:null,assignId:'',topId:'',checks:new Set()};
 let EVC=null;
 const GRP_BG=['#d1fae5','#dbeafe','#fef3c7','#ede9fe'];
 const GRP_FG=['#065f46','#1e3a8a','#78350f','#4c1d95'];
@@ -1929,10 +1903,14 @@ function subLineClass(assign,leaves,sid){
 function summaryHTML(assign,top,sid){
   const sc=DB.evals?.[assign.id]?.[sid]||{};
   const a=nodeAvg(top,sc), all=studentAssignAvg(assign.id,sid);
-  return `<div class="flex flex-col items-center gap-0.5">
-    <span class="font-extrabold text-base" style="color:var(--primary-d)">${fmt(a)}</span>
-    ${qBadge(a)}
-    <span class="text-[10px] text-slate-400">รวมทุกด้าน ${fmt(all)}</span>
+  const q = qualityOf(a);
+  const badgeCls = q.level!==null ? q.cls : 'bg-slate-100 text-slate-500';
+  const badgeTxt = q.level!==null ? q.label : '—';
+  
+  return `<div class="flex flex-col items-center gap-0.5" style="line-height:1.1">
+    <span class="font-extrabold text-[13px]" style="color:var(--primary-d)">${fmt(a)}</span>
+    <span class="badge ${badgeCls}" style="font-size:9px;padding:0.1rem 0.3rem">${badgeTxt}</span>
+    <span class="text-[9px] text-slate-400">รวม ${fmt(all)}</span>
   </div>`;
 }
 function classAvgHTML(assign,sts){
@@ -1981,44 +1959,48 @@ function evalMatrixHTML(assign){
       const n=L[i].anc[k]; let j=i+1;
       while(j<L.length && L[j].anc[k]?.id===n?.id) j++;
       cells+= n
-        ? `<th colspan="${j-i}" class="evg" style="background:${GRP_BG[k%4]};color:${GRP_FG[k%4]}" title="${esc(n.name)}"><div class="evg-in">${esc(n.name)}</div></th>`
+        ? `<th colspan="${j-i}" class="evg" style="background:${GRP_BG[k%4]};color:${GRP_FG[k%4]};font-size:.75rem;padding:.3rem .2rem">${esc(n.name)}</th>`
         : `<th colspan="${j-i}" class="evg" style="background:#f1f5f9"></th>`;
       i=j;
     }
     hdrRows.push(cells);
   }
-  hdrRows.push(L.map(l=>`<th class="evl" title="${esc(l.node.name)}"><span class="evcode">${fullCode(rootNo,l.code)}</span><div class="evtxt">${esc(l.node.name)}</div></th>`).join(''));
-   const fixedTh=`<th rowspan="${R}" class="evf evf-name">นักเรียน<br><span style="font-weight:500;font-size:.68rem;color:#64748b">เลือก · เลขที่ · ชื่อ</span></th>`;
-  const tailTh=`
-    <th rowspan="${R}" class="evf" style="min-width:96px;text-align:center">สรุปด้านนี้</th>
-    <th rowspan="${R}" class="evf" style="min-width:140px">ตั้งค่าทั้งแถว</th>`;
-  const thead=hdrRows.map((c,i)=>`<tr>${i===0?fixedTh:''}${c}${i===0?tailTh:''}</tr>`).join('');
+  
+  // ปรับขนาดความกว้างของหัวข้อแบบประเมินให้กว้างขึ้น (min-width: 65px)
+  hdrRows.push(L.map(l=>`<th class="evl" style="min-width:65px;padding:0.3rem 0.2rem" title="${esc(l.node.name)}"><span class="evcode" style="font-size:.7rem;padding:0.1rem 0.3rem">${fullCode(rootNo,l.code)}</span><div class="evtxt" style="font-size:.75rem;margin-top:0.2rem;line-height:1.2">${esc(l.node.name)}</div></th>`).join(''));
 
+  // ปรับขนาดคอลัมน์ปักหมุด (Sticky) ให้เล็กลง
+  const fixedTh=`
+    <th rowspan="${R}" class="evf" style="left:0;min-width:32px;width:32px;padding:0.2rem"></th>
+    <th rowspan="${R}" class="evf" style="left:32px;min-width:40px;width:40px;text-align:center;padding:0.2rem">เลขที่</th>
+    <th rowspan="${R}" class="evf" style="left:72px;min-width:130px;width:130px;max-width:130px;padding:0.2rem">ชื่อ-นามสกุล</th>
+    <th rowspan="${R}" class="evf" style="min-width:80px;text-align:center;padding:0.2rem">สรุป</th>
+    <th rowspan="${R}" class="evf" style="min-width:110px;padding:0.2rem">ตั้งค่า</th>`;
+    
+  const thead=hdrRows.map((c,i)=>`<tr>${i===0?fixedTh:''}${c}</tr>`).join('');
+
+  // ปรับขนาดเซลล์ในแถวให้กะทัดรัด และเว้นที่ให้ช่องประเมินกว้างขึ้น
   const rows=sts.map(st=>{
     return `<tr data-row="${st.id}">
-      <td class="stk-name">
-        <div class="nm-wrap">
-          <div class="nm-top">
-            <input type="checkbox" class="w-4 h-4 accent-green-600 ev-chk" data-sid="${st.id}" ${EV.checks.has(st.id)?'checked':''}>
-            <span class="nm-no">${st.no||'-'}</span>
-            <span data-sub="${st.id}" class="nm-sub ${subLineClass(assign,leaves,st.id)}">${subLineHTML(assign,leaves,st.id)}</span>
-          </div>
-          <p class="nm-name">${esc(st.name)}</p>
+      <td class="stk" style="left:0;padding:0.2rem"><div class="flex justify-center"><input type="checkbox" class="w-4 h-4 accent-green-600 ev-chk" data-sid="${st.id}" ${EV.checks.has(st.id)?'checked':''}></div></td>
+      <td class="stk text-center font-semibold text-slate-600" style="left:32px;padding:0.2rem">${st.no||'-'}</td>
+      <td class="stk" style="left:72px;padding:0.2rem 0.4rem">
+        <p class="font-bold text-[13px] leading-tight text-slate-800 break-words" style="word-break:break-word">${esc(st.name)}</p>
+        <p data-sub="${st.id}" class="${subLineClass(assign,leaves,st.id)}" style="font-size:10px;line-height:1.2">${subLineHTML(assign,leaves,st.id)}</p>
+      </td>
+      <td class="text-center" data-summary="${st.id}" style="padding:0.2rem">${summaryHTML(assign,top,st.id)}</td>
+      <td class="whitespace-nowrap" style="padding:0.2rem">
+        <div class="flex gap-1 justify-center">
+          ${[3,2,1,0].map(v=>`<button class="btn btn-xs !px-1.5 !py-1 s${v}" data-rowset="${st.id}" data-v="${v}" title="ตั้งค่าทั้งแถว = ${v}" style="font-size:11px">${v}</button>`).join('')}
         </div>
       </td>
       ${leaves.map(l=>{
         const v=getScore(assign.id,st.id,l.node.id);
-        return `<td class="text-center"><select class="score-sel ${v===null?'sn':'s'+v}" data-a="${assign.id}" data-s="${st.id}" data-t="${l.node.id}" aria-label="${esc(fullCode(rootNo,l.code))}">
+        return `<td class="text-center" style="padding:0.2rem; min-width:65px"><select class="score-sel ${v===null?'sn':'s'+v}" data-a="${assign.id}" data-s="${st.id}" data-t="${l.node.id}" aria-label="${esc(fullCode(rootNo,l.code))}">
           <option value="" ${v===null?'selected':''}>–</option>
           ${[3,2,1,0].map(x=>`<option value="${x}" ${v===x?'selected':''}>${x}</option>`).join('')}
         </select></td>`;
       }).join('')}
-      <td class="text-center" data-summary="${st.id}">${summaryHTML(assign,top,st.id)}</td>
-      <td class="whitespace-nowrap">
-        <div class="flex gap-1">
-          ${[3,2,1,0].map(v=>`<button class="btn btn-xs !px-2 !py-1 s${v}" data-rowset="${st.id}" data-v="${v}" title="ตั้งค่าทั้งแถว = ${v}">${v}</button>`).join('')}
-        </div>
-      </td>
     </tr>`;
   }).join('');
 
@@ -2029,7 +2011,7 @@ function evalMatrixHTML(assign){
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-4 gap-4">
-      <div class="card p-3 xl:col-span-1 self-start order-2 xl:order-1">
+      <div class="card p-3 xl:col-span-1 self-start">
         <p class="font-bold text-sm text-slate-800 mb-2"><i class="fa-solid fa-list-ul mr-1" style="color:var(--primary)"></i> หัวข้อที่ประเมินในด้านนี้ (${leaves.length} ข้อ)</p>
         <div class="max-h-[30rem] overflow-y-auto scrollbar mb-3 pr-1">${legend}</div>
         <div class="text-[12px] bg-slate-50 rounded-lg p-3 space-y-1.5">
@@ -2041,7 +2023,7 @@ function evalMatrixHTML(assign){
         </div>
       </div>
 
-      <div class="xl:col-span-3 space-y-3 min-w-0 order-1 xl:order-2">
+      <div class="xl:col-span-3 space-y-3 min-w-0">
         <div class="rounded-2xl p-4" style="background:var(--primary-s);border:1.5px solid var(--primary)">
           <p class="text-[12px] font-bold" style="color:var(--primary-d)">ด้านที่ประเมิน — ด้านที่ ${rootNo}</p>
           <h3 class="text-lg font-extrabold text-slate-900 leading-snug">${esc(top.name)}</h3>
@@ -2060,15 +2042,12 @@ function evalMatrixHTML(assign){
           <span class="ml-auto text-xs text-slate-500" id="chkCount">เลือก 0 คน</span>
         </div>
 
-                <div id="evWrap" class="card p-3 ${EV.fs?'evfs':''}">
-          <div class="flex items-center justify-between gap-2 mb-2">
-            <p class="text-[11px] text-slate-500"><i class="fa-solid fa-arrows-up-down-left-right mr-1"></i>เลื่อนได้ทุกทิศทาง ชื่อนักเรียนจะค้างอยู่ด้านซ้าย</p>
-            <button class="btn btn-outline btn-sm" id="btnFs"><i class="fa-solid ${EV.fs?'fa-compress':'fa-expand'}"></i> <span>${EV.fs?'ออกจากเต็มจอ':'ดูเต็มจอ'}</span></button>
-          </div>
-          <div class="overflow-auto scrollbar evscroll" style="max-height:78dvh;-webkit-overflow-scrolling:touch">
-            <table class="evt" id="evTable">
+        <div class="card p-3">
+          <!-- เพิ่ม overflow-x-auto และการเลื่อนแบบ smooth touch สำหรับมือถือ/ไอแพด -->
+          <div class="scrollbar-x" style="max-height:78vh;">
+            <table class="evt" id="evTable" style="width: max-content; min-width: 100%;">
               <thead>${thead}</thead>
-              <tbody>${rows||`<tr><td colspan="${3+leaves.length}" class="text-center text-slate-400 py-8">ยังไม่มีนักเรียนในชั้นนี้</td></tr>`}</tbody>
+              <tbody>${rows||`<tr><td colspan="${5+leaves.length}" class="text-center text-slate-400 py-8">ยังไม่มีนักเรียนในชั้นนี้</td></tr>`}</tbody>
             </table>
           </div>
         </div>
@@ -2109,26 +2088,14 @@ function bindEval(assign){
   const fixHead=()=>{ let y=0; $$('#evTable thead tr').forEach(tr=>{ $$('th',tr).forEach(th=>th.style.top=y+'px'); y+=tr.offsetHeight; }); };
   fixHead(); setTimeout(fixHead,350); window.onresize=fixHead;
 
-    // ปุ่มดูเต็มจอ
-  const fsBtn=$('#btnFs');
-  if(fsBtn) fsBtn.onclick=()=>{
-    EV.fs=!EV.fs;
-    $('#evWrap').classList.toggle('evfs',EV.fs);
-    fsBtn.innerHTML=`<i class="fa-solid ${EV.fs?'fa-compress':'fa-expand'}"></i> <span>${EV.fs?'ออกจากเต็มจอ':'ดูเต็มจอ'}</span>`;
-    setTimeout(fixHead,60);
+  const refreshRow=sid=>{
+    const sub=$(`[data-sub="${sid}"]`), sum=$(`[data-summary="${sid}"]`);
+    if(sub){ sub.className=subLineClass(assign,leaves,sid); sub.innerHTML=subLineHTML(assign,leaves,sid); }
+    if(sum) sum.innerHTML=summaryHTML(assign,top,sid);
   };
-  document.onkeydown=e=>{ if(e.key==='Escape'&&EV.fs&&fsBtn) fsBtn.click(); };
   const refreshClass=()=>{ const b=$('#classAvgBox'); if(b) b.innerHTML=classAvgHTML(assign,sts); };
   EVC={refreshRow,refreshClass};
-  // ปุ่มดูเต็มจอ
-  const fsBtn=$('#btnFs');
-  if(fsBtn) fsBtn.onclick=()=>{
-    EV.fs=!EV.fs;
-    $('#evWrap').classList.toggle('evfs',EV.fs);
-    fsBtn.innerHTML=`<i class="fa-solid ${EV.fs?'fa-compress':'fa-expand'}"></i> <span>${EV.fs?'ออกจากเต็มจอ':'ดูเต็มจอ'}</span>`;
-    setTimeout(fixHead,60);
-  };
-  document.onkeydown=e=>{ if(e.key==='Escape'&&EV.fs&&fsBtn) fsBtn.click(); };
+
   $$('[data-top]').forEach(b=>b.onclick=()=>{ EV.topId=b.dataset.top; EV.checks.clear(); go('eval'); });
 
   // ตั้งค่าทั้งแถว
